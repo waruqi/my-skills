@@ -1,0 +1,4 @@
+interface:
+  display_name: "项目架构学习地图"
+  short_description: "逐层理解项目架构，生成含运行数据、源码导航与设计取舍的本地网站"
+  default_prompt: "使用 $project-understanding 分析当前项目，生成中文架构学习网站，展示运行流程、中间数据、源码位置和设计取舍。"
