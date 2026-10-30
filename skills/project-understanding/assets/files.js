@@ -77,11 +77,14 @@
   document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='p'){e.preventDefault();document.querySelector('dialog').close();document.body.classList.remove('files-hidden');document.querySelector('#toggle-files').setAttribute('aria-expanded','true');switchPanel('files');query.focus();query.select();}});
   window.addEventListener('hashchange',markPage);
   function switchPanel(panel) {
+    document.querySelector('#history-panel').hidden=panel!=='history';
+    document.querySelector('#history-tab').setAttribute('aria-pressed',String(panel==='history'));
     document.querySelector('#architecture-panel').hidden=panel!=='nav';
     document.querySelector('#files-panel').hidden=panel!=='files';
     document.querySelector('#nav-tab').setAttribute('aria-pressed',String(panel==='nav'));
     document.querySelector('#files-tab').setAttribute('aria-pressed',String(panel==='files'));
   }
+  window.selectSidebarPanel=switchPanel;
   const branch=parent=>guide.pages.filter(p=>p.parent===parent).map(p=>{
     const children=branch(p.id);
     const link=`<a href="#${esc(p.id)}">${esc(p.title)}</a>`;
@@ -91,5 +94,6 @@
   document.querySelector('#architecture-tree').addEventListener('click',e=>{if(e.target.closest('a'))document.querySelector('dialog').close();});
   document.querySelector('#nav-tab').onclick=()=>switchPanel('nav');
   document.querySelector('#files-tab').onclick=()=>switchPanel('files');
+  document.querySelector('#history-tab').onclick=()=>{switchPanel('history');document.querySelector('dialog').close();location.hash='history';};
   draw();
 })();

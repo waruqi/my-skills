@@ -22,6 +22,8 @@
     return html+esc(text.slice(end));
   }
 
+  window.highlightSourceText = highlight;
+
   function rows(text, filename, start, focus) {
     return highlight(text,filename).split('\n').map((line,i)=>`<span class="code-row ${start+i===focus?'key-line':''}" data-line="${start+i}"><button class="line-number" data-goto="${start+i}" aria-label="定位第 ${start+i} 行">${start+i}</button><code>${line || ' '}</code></span>`).join('');
   }

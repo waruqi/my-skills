@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from history import build_history
 
 
 def build(root, content_path, out):
@@ -154,11 +155,12 @@ def build(root, content_path, out):
         item["chunk"] = chunk
         (out / chunk).write_text("window.GUIDE.sources[" + json.dumps(path) + "]=" + json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/") + ";\n")
     content["files"] = files
+    content["history"] = build_history(root, out, content)
     revision = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=root, capture_output=True, text=True)
     content.update(sources=sources, revision=revision.stdout.strip() if revision.returncode == 0 else "uncommitted")
     out.mkdir(parents=True, exist_ok=True)
     assets = Path(__file__).resolve().parent.parent / "assets"
-    for name in ("index.html", "style.css", "app.js", "visuals.js", "source.js", "files.js"):
+    for name in ("index.html", "style.css", "app.js", "visuals.js", "source.js", "files.js", "history.js"):
         shutil.copyfile(assets / name, out / name)
     encoded = json.dumps(content, ensure_ascii=False).replace("</", "<\\/")
     (out / "data.js").write_text("window.GUIDE = " + encoded + ";\n")

@@ -37,3 +37,9 @@
 构建器为 sources 自动补充 absolutePath 和 fileUrl，均由目标根目录解析，不在技能中写死。引用的 symbol 匹配行作为关键入口行高亮。语法着色是轻量词法着色，非类型分析；Markdown/纯文本保持原样。复制路径、原文件链接和 VS Code/Cursor 定位均指向当前本机真实文件。
 
 构建器从 Git 跟踪文件生成 files；可读 UTF-8 文本按需打包为 source-files 下的离线脚本块。二进制、超过 2 MB 和常见凭证文件仅展示路径和未打包原因。未被分析引用的文件可阅读源码，但不宣称已有架构讲解。
+
+## Git 历史
+
+顶层可设 historyOptions: {days:92,maxCommits:2500}。historyNotes 为 {commit,title,summary,reason,impact,evidence,pages,files} 数组；commit 为完整 SHA，pages 为当前讲解 ID，files 为核对过的路径字符串。构建器从本机全部引用导出范围内提交、父提交、作者/提交时间、文件状态及分支 tip。逐提交 diff 相对第一父提交，根提交相对空树；分支比较是 HEAD → tip 的净变化。未解读提交不生成虚构原因。
+
+历史脚本块保存在 git-history/，浏览器按需加载。单文件 diff 最多显示 3000 行并标注截断；常见凭证文件省略内容。历史差异的行号属于旧/新提交，架构链接指向当前讲解。

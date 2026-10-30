@@ -15,6 +15,7 @@
 
   function render() {
     const id = location.hash.slice(1) || "overview";
+    if (id === 'history' || id.startsWith('history/')) { window.renderHistory(id); return; }
     const page = g.pages.find(p => p.id === id);
     if (!page) {
       main.innerHTML = '<p>该页面不存在。<a href="#overview">返回总架构图</a></p>';
