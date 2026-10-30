@@ -1,4 +1,4 @@
-/* Render authored architecture, sequence and state diagrams without network dependencies. */
+/* 离线渲染分层架构图，节点直接进入子页或定位当前讲解。 */
 (() => {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
   window.renderAtlasVisuals = (page) => {
@@ -15,11 +15,22 @@
     document.querySelector("main .hero").after(host);
     for (const card of host.querySelectorAll(".visual-card")) {
       const d = diagrams.find((item) => item.id === card.dataset.diagram);
+      if (d.after) document.getElementById(`section-${d.after}`).after(card);
       let zoom = 1;
       const select = (node) => {
+        if (node.target) { location.hash = node.target; return; }
         card.querySelectorAll(".visual-node").forEach((el) => el.classList.toggle("selected", el.dataset.node === node.id));
+        if (node.section) {
+          const section = document.getElementById(`section-${node.section}`);
+          document.querySelectorAll('.section.selected').forEach(el => el.classList.remove('selected'));
+          section.classList.add('selected');
+          section.querySelectorAll('details').forEach(el => { el.open = true; });
+          section.focus({preventScroll:true});
+          section.scrollIntoView({block:'start'});
+          return;
+        }
         const ref = node.ref;
-        card.querySelector(".visual-detail").innerHTML = `<strong>${esc(node.label)}</strong><p>${esc(node.detail || node.sub)}</p><div class="controls">${node.target ? `<a class="visual-action" href="#${esc(node.target)}">进入模块 →</a>` : ""}${Number.isInteger(node.step) ? `<button data-step="${node.step}">查看第 ${node.step+1} 步的数据</button>` : ""}${ref ? `<button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line || 1}">${esc(ref.path)}:${ref.line || 1}</button>` : ""}</div>`;
+        card.querySelector(".visual-detail").innerHTML = `<strong>${esc(node.label)}</strong><p>${esc(node.detail || node.sub)}</p><div class="controls">${ref ? `<button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line || 1}">${esc(ref.path)}:${ref.line || 1}</button>` : ""}</div>`;
       };
       card.addEventListener("click", (event) => {
         const node = event.target.closest("[data-node]");
@@ -27,7 +38,7 @@
         const button = event.target.closest("[data-zoom]");
         if (button) {
           zoom = button.dataset.zoom === 'reset' ? 1 : Math.max(0.6, Math.min(2.5, zoom + (button.dataset.zoom === '+' ? 0.25 : -0.25)));
-          card.querySelector("svg").style.width = `${zoom*100}%`;
+          card.querySelector("svg").style.width = `${Math.max(720, card.querySelector('.visual-scroll').clientWidth)*zoom}px`;
         }
       });
       card.addEventListener("keydown", (event) => {

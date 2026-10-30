@@ -1,54 +1,58 @@
 ---
 name: project-understanding
-description: Analyze a repository and generate a local, layered architecture learning website with source evidence, execution traces, intermediate data, and design tradeoffs. Use for project onboarding or understanding an unfamiliar codebase.
+description: 分析任意项目，以可下钻的架构图串联子系统、模块、运行流程、数据样本与关键源码，生成由浅入深的离线学习网站。适用于接手项目、源码学习和架构理解。
 ---
 
-# Project understanding
+# 项目理解
 
-Turn the current repository into an explorable explanation in the user's language. Default output: `architecture-guide/`. Keep the application unchanged. The result must explain behavior, not merely list directories.
+让用户用尽量少的时间建立正确的整体认识，再沿图进入实现细节，最终能理解关键代码。默认输出到目标项目的 `architecture-guide/`，按用户语言编写。技能只保留通用方法、格式和渲染器；项目名称、路径、标识、架构和结论全部从目标项目提取，写入项目输出。
 
-Keep reusable instructions, templates and the builder in the skill's source repository; keep generated content, runtime captures and the website in the analyzed project. When improving this skill, update its canonical source rather than creating a second skill copy inside the output directory. Record the source location and exact regeneration command in the target project's README.
+## 建立证据
 
-## Investigate before writing
+读取仓库约定、README、构建配置、清单、公开入口和关键实现。确定项目名、用途、技术栈、部署单元、模块及运行入口；名称冲突时说明依据，无正式名称时明确采用目录名。不能带入技能仓库或上次分析项目的信息。
 
-Extract project identity and metadata from the repository being analyzed: its README, manifests, public entry points, build configuration and source. Determine the display name, purpose, languages, frameworks, modules, directories, entry points and verified relationships. Do not use the skill repository's name or a previous project's values. Resolve conflicting names from evidence; if no product name exists, use the target directory name as an explicitly stated fallback.
+覆盖全部主要模块，区分正式实现、可选集成、实验代码和计划。先跟踪一条具体用户操作，再扩展其他主要运行路径。每个边界记录生产者、消费者、数据类型、样本和源码位置。完整阅读涉及结论的文件，截断输出不算完整阅读；纳入源码快照不等于逐行审计。
 
-Write this extracted information into the target project's `content.json` (`title`, `subtitle`, `intro`, `modules`, dependency inventory and diagrams). Templates must read project-specific values from that data. Keep skill instructions, assets, scripts and examples free of concrete analyzed-project names, paths, logos, revisions and topology. A generic UI label is allowed; a project's identity must never be hardcoded in the renderer.
+更新已有分析时比较源码摘要和版本，复用仍然有效的证据，重新检查受影响的结论。说明覆盖范围和未验证部分，不编造细节填满页面。
 
-Read repository instructions, manifests, public entry points and the implementation of the representative paths. Inventory every workspace, including packages missing from the root README. Distinguish production entry points, optional integrations, experimental implementations and plans. A dependency is not evidence that a runtime calls a module.
+## 先让人看到项目能做什么
 
-Follow one concrete user action through entry, orchestration, domain logic, external boundary, persistence and presentation. For each boundary record the producer, consumer, exact type, sample and source symbol. Read relevant files completely in bounded chunks; a truncated tool response does not count as a complete read. Expand into the other major runtime paths. Do not imply every file was audited.
+首页先用一句具体的话说明谁会用它、拿它完成什么事、结果在哪里。选一个小而完整的场景，把用户输入、运行中的界面、最终产物和修改前后放在一起。第一张图画这件事怎样完成，先写动作和结果，再标模块名；不要以包分组、设计术语或阅读指南开场。库和后台服务也应展示最小调用及可观察结果，不强造界面。
 
-For each module explain: the problem; a concrete example; the mechanism; why it is needed; its cost; where to read next. Distinguish documented rationale from your inference. Include ownership, lifecycle, error behavior and extension points when relevant. Use actual paths and symbols, never guessed line numbers.
+从首页的图进入可照做的快速体验：前提条件、在哪个目录执行、完整命令、所需配置、成功时看到什么，以及常见失败如何定位。分清安装成品、从源码启动和服务部署；只写项目实际需要的路径。优先采用仓库截图或本地捕获，说明版本和来源。示意界面、预期结果、真实运行分别标注；未经执行不能写成已验证。不给首次体验塞入整套开发流程。
 
-For an AI application, show the persisted record, in-memory message, normalized model context, provider request and response events separately. Explain system instructions, tool declarations, call/result pairing, filtering, summaries, token pressure and what never reaches the model. For other projects choose equivalent boundary representations (HTTP request, job, database row, render model).
+## 由浅入深
 
-Prefer an offline executable trace with the project's fake adapters and temporary fixtures. Capture snapshots at actual boundaries; mock responses must be labeled. Capture provider serialization with an injected transport or pre-send callback and stop before real I/O. Never claim a synthetic trace was sent to a service. No credentials, real user sessions or paid requests are needed. Label illustrative data and omissions if execution is unavailable.
+首页只回答项目做什么、输入来自哪里、主要能力如何合作、结果去哪里。用少量有意义的系统边界组织总图，不把全部类和文件塞进首页。点击子系统后再看该层的组件关系；进入模块后再看职责、运行和实现。小项目可以省略不必要的层级，不能发明不存在的子系统。
 
-Keep all analyzed project names, paths, revisions, module maps and case-study conclusions in the target project output, never in this reusable skill. Derive the architecture afresh for each repository. The workflow applies to libraries, services, frontends, CLIs and mixed-language systems; AI-specific context views are conditional on the project actually using an LLM.
+每页固定为：简短标题和所在层级、当前层架构图、当前页讲解。图是唯一的内容导航入口，不生成侧栏目录、模块卡片清单、阅读清单、源码索引、术语列表或独立依赖列表。面包屑仅表示祖先路径，帮助返回上层。所有页面必须从首页的图逐层可达。
 
-## Build the learning site
+连线必须区分调用、返回、数据流、依赖和职责分解。下钻节点直接进入子页；当前页节点可定位下方解释、数据或代码。根据问题选用系统边界图、组件图、时序图、数据变化图或状态图；不能只把列表改成方框排列。
 
-Read [the content format](references/content-format.md). Populate the language-neutral dependency inventory from inspected manifests, imports or build definitions; do not assume a language, package manager or directory layout. Copy `assets/` to the output directory; write `content.json` with the actual analysis. The reusable renderer provides module navigation, dependency graph, source reader, execution steps, search and local reading progress. Adapt it when the project needs different concepts.
+每个模块讲清六件事：是什么及解决什么问题；设计原因和代价；实际如何运行；输入的生产者、格式、字段含义与样本；输出的消费者、格式、错误与样本；对应源码和关键逻辑。用具体情景串联，术语在出现处解释。不能执行的样本注明“教学示意”；不适用的输入输出说明原因，不伪造接口。
 
-Run:
+模块图下直接展开一组有对应关系的输入、处理和输出：谁给出参数，当前模块改变了什么，谁拿到结果。短样本和关键字段解释必须可见，长记录留作进一步核对。用同一任务贯穿相邻模块，标明摘录省略了什么；不能把所有 JSON 塞进折叠框就算讲清数据流。
+
+## 讲得像带人读代码
+
+先说发生的事，再解释机制和必要性。例如从“读完文件后，程序把内容放回下一轮请求”进入消息结构，而不是从“上下文协议归一化”开始。标题写本段的具体发现，正文用连贯短句，保留必要的技术名并就地解释。不要让每页都重复“是什么、为什么、如何运行”或“输入：来源、格式与样本”的问卷标题；这些是分析检查点，不是给读者看的固定措辞。解释设计时说明没有该机制会遇到的具体问题，再讲选择和代价；区分源码事实与自己的推断。
+
+代码必须融入理解链路。图中的实现节点进入机制与代码页；正文嵌入真实文件的关键片段，解释入口、分支、状态变化和返回值，可继续打开带行号的完整源码。不要只给文件名，也不要默认展示几百行代码。让用户能把行为、数据字段和实现对应起来。
+
+## 运行与数据
+
+优先使用项目已有假实现、临时文件和本地环境复现流程，在真实边界捕获快照，并标明模拟外部响应的范围。不能把模拟样本描述成线上抓包。AI 项目额外展示内部消息、系统指令、工具声明、上下文选择与最终请求体，通过注入传输或发送前回调阻止真实外部请求。其他项目展示对应的请求、任务、存储记录或渲染数据，不强套 LLM 概念。
+
+## 生成与验收
+
+按[内容格式](references/content-format.md)编写 `content.json`。项目元信息、页面树、图、解释、数据和引用全部来自目标项目，模板只做通用渲染。
 
 ```sh
 python3 <skill-directory>/scripts/build.py --root <repository> --content <output>/content.json --out <output>/dist
 ```
 
-The builder validates references and embeds explicitly cited source snapshots with SHA-256 and repository revision. It does not analyze the project or refresh prose automatically. After code changes, re-analyze affected claims before rebuilding. Do not copy a previous repository's explanations into the next one.
+构建器检查页面层级、图的覆盖与可达性、节点定位和源码引用，它不会自动分析设计原因。运行相关检查和可用的浏览器验证：从首页沿图完成阅读链，返回上层，定位数据与代码，打开完整源码；检查键盘操作、缩放、窄屏、文字遮挡和箭头方向。不能用侧栏兜底掩盖不可达页面。
 
-Keep the website offline-capable: no CDN, no required service, no publication unless requested. Explain overview → modules → trace/data → rationale → source. Graph arrows must say whether they represent dependencies, calls or data movement. Mark statements based only on documentation and future work.
+验收时先按第一次接触项目的读者来读：首页能否很快说清用途、输入和结果；能否照着启动并认出成功效果；进入任一主要模块能否直接找到一组输入输出，并顺着图追到代码。页面数、图数量和格式校验通过不能代替这些检查。
 
-Lead with visual explanations, not a directory list or a page of cards. Put a layered system diagram at the top of the overview and an internal responsibility or call diagram at the top of each major module. Show a representative execution as a sequence/swimlane diagram, and data transformations as before/after or accumulation diagrams. Use branch/state diagrams where recovery or state changes matter. Choose diagram types according to the actual architecture; do not invent sequential arrows between unrelated responsibilities.
-
-Use the offline SVG renderer in `assets/visuals.js` with the `diagrams` schema in [the content format](references/content-format.md). Author project-specific nodes, boundaries and labeled edges from evidence. Diagram nodes should expose the explanation and, where applicable, source or runtime-step links. Preserve the existing narrative and raw samples as deeper layers. Support zoom and horizontal scrolling on narrow screens. Do not count a list with arrows or a dependency graph alone as a complete visual explanation.
-
-## Verify and hand off
-
-Run the builder, syntax checks and repository-required checks. Verify source references, graph nodes, navigation, all trace steps, available data-view switching and narrow layouts; use browser QA when available. Report unavailable checks honestly. Re-read all authored files. Do not use a full unrelated test suite as a substitute for checking the website.
-
-For visual acceptance, inspect rendered diagrams at desktop and mobile widths: labels must fit nodes, arrows must have a clear meaning and direction, modules must remain distinct from runtime stages, and clicks/keyboard activation must reveal the expected explanation, sample or source. Check these behaviors on the copied output, not only on the template. A future invocation should generate diagrams as part of the initial deliverable, without requiring a follow-up request.
-
-Provide the local entry, regeneration command, evidence limits and skill location. A single future invocation such as `$project-understanding 分析当前项目并生成架构学习网站` asks the agent to repeat the analysis and generation; it is not a claim that static dependency scanning can infer the entire architecture.
+交付网站入口及覆盖与验证边界，在目标项目 README 记录实际命令。可复用技能在源仓库维护，项目内容和网站留在目标项目。升级旧内容时按层级重新组织证据，不能为通过构建而机械补上无意义的图或段落。
