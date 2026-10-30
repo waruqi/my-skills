@@ -104,7 +104,7 @@ def build(root, content_path, out):
                     raw = target.read_bytes()
                     if len(raw) > 2_000_000:
                         raise ValueError(f"引用文件超过 2 MB: {path}")
-                    sources[path] = {"text": raw.decode("utf-8"), "sha256": hashlib.sha256(raw).hexdigest()}
+                    sources[path] = {"text": raw.decode("utf-8"), "sha256": hashlib.sha256(raw).hexdigest(), "absolutePath": str(target), "fileUrl": target.as_uri()}
                 lines = sources[path]["text"].splitlines()
                 if value.get("symbol"):
                     matches = [i for i, line in enumerate(lines) if value["symbol"] in line]
@@ -122,11 +122,43 @@ def build(root, content_path, out):
                 resolve(child)
 
     resolve(content)
+    out.mkdir(parents=True, exist_ok=True)
+    chunk_dir = out / "source-files"
+    chunk_dir.mkdir(exist_ok=True)
+    files = []
+    for path in sorted(tracked - {""}):
+        target = (root / path).resolve()
+        item = {"name": path, "fileUrl": target.as_uri(), "readable": False}
+        files.append(item)
+        if not target.is_relative_to(root) or not target.is_file():
+            continue
+        if re.search(r"(^|/)(\.env(?:\..*)?|credentials(?:\..*)?|id_rsa|id_ed25519)$|\.(pem|key|p12)$", path, re.I):
+            item["reason"] = "可能包含凭证，未打包"
+            continue
+        if target.stat().st_size > 2_000_000:
+            item["reason"] = "超过 2 MB，使用原文件入口"
+            continue
+        raw = target.read_bytes()
+        try:
+            source_text = raw.decode("utf-8")
+            if "\0" in source_text:
+                raise UnicodeError()
+        except UnicodeError:
+            item["reason"] = "二进制文件，使用原文件入口"
+            continue
+        item["readable"] = True
+        if path in sources:
+            continue
+        snapshot = {"text": source_text, "sha256": hashlib.sha256(raw).hexdigest(), "absolutePath": str(target), "fileUrl": target.as_uri()}
+        chunk = "source-files/" + hashlib.sha256(path.encode()).hexdigest()[:24] + ".js"
+        item["chunk"] = chunk
+        (out / chunk).write_text("window.GUIDE.sources[" + json.dumps(path) + "]=" + json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/") + ";\n")
+    content["files"] = files
     revision = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=root, capture_output=True, text=True)
     content.update(sources=sources, revision=revision.stdout.strip() if revision.returncode == 0 else "uncommitted")
     out.mkdir(parents=True, exist_ok=True)
     assets = Path(__file__).resolve().parent.parent / "assets"
-    for name in ("index.html", "style.css", "app.js", "visuals.js"):
+    for name in ("index.html", "style.css", "app.js", "visuals.js", "source.js", "files.js"):
         shutil.copyfile(assets / name, out / name)
     encoded = json.dumps(content, ensure_ascii=False).replace("</", "<\\/")
     (out / "data.js").write_text("window.GUIDE = " + encoded + ";\n")
