@@ -7,7 +7,7 @@
     const flow = original && slide?.steps ? {...original, steps:original.steps.slice(slide.steps[0], slide.steps[1] + 1)} : original;
     if (!flow) return;
     const card = [...document.querySelectorAll('.visual-card')].find(el => el.dataset.diagram === flow.diagram);
-    const svg = card.querySelector('svg');
+    const svg = card.querySelector('.atlas-svg');
     const diagram = window.GUIDE.diagrams.find(d => d.id === flow.diagram);
     card.classList.add('walkthrough-card');
     card.querySelector('.visual-detail').hidden = true;
@@ -15,6 +15,7 @@
     controls.className = 'walkthrough-controls';
     const phases = [...new Set(flow.steps.map(step => step.phase))];
     controls.innerHTML = `<div class="walkthrough-toolbar"><button data-action="play" aria-pressed="false">播放</button><button data-action="previous" aria-label="动画上一步">‹</button><button data-action="next" aria-label="动画下一步">›</button><label><input type="range" min="0" max="${flow.steps.length - 1}" value="0" aria-label="演示进度"></label><span class="walkthrough-position" role="status"></span><details class="walkthrough-options"><summary>设置</summary><div><button data-action="restart">从头开始</button><label>速度 <select aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><select aria-label="演示阶段">${phases.map(phase => `<option value="${flow.steps.findIndex(s => s.phase === phase)}">${esc(phase)}</option>`).join('')}</select></div></details></div>`;
+    for (const [selector,name,label] of [['[data-action=previous]','previous','动画上一步'],['[data-action=next]','next','动画下一步'],['[data-action=restart]','replay','从头重播'],['.walkthrough-options>summary','settings','动画设置']]) window.setGuideIcon(controls.querySelector(selector),name,label);
     card.prepend(controls);
     const layout = document.createElement('div');
     layout.className = 'walkthrough-layout';
@@ -37,7 +38,7 @@
     function pause() {
       playing = false;
       clearTimeout(timer);
-      play.textContent = index === flow.steps.length - 1 ? '重播' : '播放';
+      window.setGuideIcon(play,index === flow.steps.length - 1 ? 'replay' : 'play',index === flow.steps.length - 1 ? '重播动画' : '播放动画');
       play.setAttribute('aria-pressed', 'false');
       svg.pauseAnimations();
     }
@@ -51,8 +52,10 @@
     function draw() {
       const step = flow.steps[index];
       if (index === flow.steps.length - 1) pause();
-      if (!playing) play.textContent = index === flow.steps.length - 1 ? '重播' : '播放';
+      if (!playing) window.setGuideIcon(play,index === flow.steps.length - 1 ? 'replay' : 'play',index === flow.steps.length - 1 ? '重播动画' : '播放动画');
       range.value = index;
+      range.style.setProperty('--played', `${flow.steps.length > 1 ? index / (flow.steps.length - 1) * 100 : 100}%`);
+      range.title = `${index + 1} / ${flow.steps.length}：${step.title}`;
       range.setAttribute('aria-valuetext', `${index + 1} / ${flow.steps.length}：${step.title}`);
       controls.querySelector('.walkthrough-position').textContent = `${index + 1} / ${flow.steps.length} · ${step.phase}`;
       controls.querySelector('[data-action="previous"]').disabled = index === 0;
@@ -94,7 +97,7 @@
       if (action === 'play') {
         if (playing) { pause(); return; }
         if (index === flow.steps.length - 1) index = 0;
-        playing = true;play.textContent = '暂停';play.setAttribute('aria-pressed', 'true');draw();schedule();return;
+        playing = true;window.setGuideIcon(play,'pause','暂停动画');play.setAttribute('aria-pressed', 'true');draw();schedule();return;
       }
       if (action || jump) {
         pause();
@@ -113,7 +116,7 @@
     document.addEventListener('visibilitychange', onVisibility);
     window.disposeWalkthrough = () => { pause();window.pauseWalkthrough=undefined;document.removeEventListener('visibilitychange', onVisibility); };
     playing = flow.steps.length > 1 && !document.hidden;
-    if (playing) { play.textContent = '暂停'; play.setAttribute('aria-pressed', 'true'); }
+    if (playing) { window.setGuideIcon(play,'pause','暂停动画'); play.setAttribute('aria-pressed', 'true'); }
     draw();
     schedule();
   };

@@ -2,6 +2,12 @@
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const icons = {
+    play:'<path d="m8 4 12 8-12 8z"/>',
+    pause:'<path d="M8 5v14M16 5v14"/>',
+    replay:'<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>',
+    settings:'<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
+    speak:'<path d="M11 4 6 8H3v8h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+    stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',
     home:'<path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/>',
     back:'<path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 0 14"/>',
     previous:'<path d="m14 5-7 7 7 7"/>', next:'<path d="m10 5 7 7-7 7"/>',
@@ -16,6 +22,7 @@
   };
   const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;
   const setIcon = (button, name, label) => { button.innerHTML=icon(name);button.title=label;button.setAttribute('aria-label',label);button.classList.add('lesson-icon'); };
+  window.setGuideIcon = setIcon;
   try { document.documentElement.dataset.theme = localStorage.getItem('guide-theme') || 'light'; } catch { document.documentElement.dataset.theme='light'; }
   // 保留 select 的值与 change 事件，交互使用统一的可搜索弹出菜单。
   function enhanceSelect(select, cleanups) {
@@ -81,7 +88,7 @@
     const themeButton=main.querySelector('[data-lesson=theme]');
     const updateTheme=()=>{const dark=document.documentElement.dataset.theme==='dark';setIcon(themeButton,dark?'sun':'moon',dark?'切换日间模式':'切换夜间模式');themeButton.setAttribute('aria-pressed',String(dark));};updateTheme();
     main.querySelector('.lesson-visual').append(card);
-    const svg = card.querySelector('svg');
+    const svg = card.querySelector('.atlas-svg');
     const bounds = svg.getBBox();
     svg.setAttribute('viewBox', `${bounds.x-18} ${bounds.y-18} ${bounds.width+36} ${bounds.height+36}`);
     const live = card.querySelector('.walkthrough-aside');
@@ -100,11 +107,12 @@
     window.revealGuideSection = openDetails;
     const speech = window.speechSynthesis;
     const speakButton = main.querySelector('[data-lesson=speak]');
+    setIcon(speakButton,'speak','朗读讲解');
     let utterance;
     const voice = () => speech?.getVoices().find(v => v.localService && v.lang.toLowerCase().startsWith('zh'));
     const updateVoice = () => { speakButton.disabled = !voice(); speakButton.title = voice() ? '使用系统本地中文语音' : '未检测到本地中文语音，可直接阅读文字讲解'; };
     updateVoice();speech?.addEventListener('voiceschanged',updateVoice);
-    const stopSpeech = () => { if (utterance) speech.cancel();utterance = undefined;speakButton.textContent = '朗读'; };
+    const stopSpeech = () => { if (utterance) speech.cancel();utterance = undefined;setIcon(speakButton,'speak','朗读讲解'); };
     const fullscreenButton = main.querySelector('[data-lesson=fullscreen]');
     const updateFullscreen = () => { setIcon(fullscreenButton,document.fullscreenElement?'exit':'fullscreen',document.fullscreenElement?'退出全屏':'全屏'); };
     updateFullscreen();document.addEventListener('fullscreenchange',updateFullscreen);
@@ -127,8 +135,8 @@
         if (utterance) {stopSpeech();return;}
         const current = card.querySelector('.walkthrough-story') || main.querySelector('.walkthrough-story');
         utterance = new SpeechSynthesisUtterance(slide.note + '\n' + (current?.querySelector('p')?.textContent || ''));
-        utterance.voice=voice();utterance.lang='zh-CN';utterance.onend=utterance.onerror=()=>{utterance=undefined;speakButton.textContent='朗读';};
-        speakButton.textContent='停止朗读';speech.speak(utterance);
+        utterance.voice=voice();utterance.lang='zh-CN';utterance.onend=utterance.onerror=()=>{utterance=undefined;setIcon(speakButton,'speak','朗读讲解');};
+        setIcon(speakButton,'stop','停止朗读');speech.speak(utterance);
       }
     });
     main.querySelector('[aria-label="讲解目录"]').onchange = event => { if (event.target.value !== '') location.hash=`lesson/${event.target.value}`; };

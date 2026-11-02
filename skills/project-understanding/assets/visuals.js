@@ -39,7 +39,7 @@
         const button = event.target.closest("[data-zoom]");
         if (button) {
           zoom = button.dataset.zoom === 'reset' ? 1 : Math.max(0.6, Math.min(2.5, zoom + (button.dataset.zoom === '+' ? 0.25 : -0.25)));
-          const svg = card.querySelector("svg");
+          const svg = card.querySelector(".atlas-svg");
           svg.style.width = zoom === 1 ? '100%' : `${card.querySelector('.visual-scroll').clientWidth*zoom}px`;
           svg.style.height = zoom === 1 ? '100%' : 'auto';
           svg.style.maxHeight = zoom === 1 ? '100%' : 'none';

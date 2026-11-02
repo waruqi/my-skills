@@ -13,3 +13,5 @@ html[data-theme=dark]{color-scheme:dark;--ink:#d5e1eb;--muted:#96aabd;--line:#30
 @media(max-width:720px){.lesson-bar{gap:2px}.lesson-bar .lesson-icon{width:27px;height:27px;min-height:27px;flex-basis:27px}.lesson-bar>.guide-picker{min-width:0;max-width:115px;flex:1;padding:4px}.lesson-bar .lesson-count{white-space:nowrap}.lesson-more{flex-shrink:0}.lesson-bar>[data-lesson=focus]{display:none}}
 
 [data-theme=dark] .lesson-title{border-color:#304454}[data-theme=dark] .walkthrough-muted{opacity:.65}[data-theme=dark] .lesson-visual .visual-caption{color:#93aaba}
+
+.lesson-mode .walkthrough-toolbar [data-action=play]{min-width:28px}.lesson-mode .lesson-note-label .lesson-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-height:28px;padding:5px;border:0;background:transparent}.lesson-mode .walkthrough-toolbar input[type=range]{background:transparent;border:0}.lesson-mode .walkthrough-toolbar .lesson-icon{padding:5px;width:28px;height:28px;min-height:28px}.lesson-mode .walkthrough-options{margin:0}
