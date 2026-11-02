@@ -2,8 +2,9 @@
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const pretty = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-  window.renderWalkthrough = page => {
-    const flow = page.walkthrough;
+  window.renderWalkthrough = (page, slide) => {
+    const original = page.walkthrough;
+    const flow = original && slide?.steps ? {...original, steps:original.steps.slice(slide.steps[0], slide.steps[1] + 1)} : original;
     if (!flow) return;
     const card = [...document.querySelectorAll('.visual-card')].find(el => el.dataset.diagram === flow.diagram);
     const svg = card.querySelector('svg');
@@ -13,7 +14,7 @@
     const controls = document.createElement('section');
     controls.className = 'walkthrough-controls';
     const phases = [...new Set(flow.steps.map(step => step.phase))];
-    controls.innerHTML = `<div class="walkthrough-toolbar"><button data-action="play" aria-pressed="false">播放</button><button data-action="previous">上一步</button><button data-action="next">下一步</button><button data-action="restart">从头开始</button><label>速度 <select aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><span class="walkthrough-position" role="status"></span></div><label class="walkthrough-progress">步骤 <input type="range" min="0" max="${flow.steps.length - 1}" value="0" aria-label="演示进度"></label><nav class="walkthrough-phases" aria-label="演示阶段">${phases.map(phase => `<button data-step="${flow.steps.findIndex(s => s.phase === phase)}">${esc(phase)}</button>`).join('')}</nav><p class="walkthrough-evidence">${esc(flow.evidence)}</p><div class="walkthrough-story" aria-live="polite"></div>`;
+    controls.innerHTML = `<div class="walkthrough-toolbar"><button data-action="play" aria-pressed="false">播放</button><button data-action="previous" aria-label="动画上一步">‹</button><button data-action="next" aria-label="动画下一步">›</button><label><input type="range" min="0" max="${flow.steps.length - 1}" value="0" aria-label="演示进度"></label><span class="walkthrough-position" role="status"></span><details class="walkthrough-options"><summary>设置</summary><div><button data-action="restart">从头开始</button><label>速度 <select aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><select aria-label="演示阶段">${phases.map(phase => `<option value="${flow.steps.findIndex(s => s.phase === phase)}">${esc(phase)}</option>`).join('')}</select></div></details></div>`;
     card.prepend(controls);
     const layout = document.createElement('div');
     layout.className = 'walkthrough-layout';
@@ -22,12 +23,17 @@
     layout.append(scroll);
     const inspector = document.createElement('div');
     inspector.className = 'walkthrough-inspector';
-    layout.append(inspector);
+    const aside = document.createElement('aside');
+    aside.className = 'walkthrough-aside';
+    aside.innerHTML = '<div class="walkthrough-story" aria-live="polite"></div><div class="walkthrough-glance"></div><details class="walkthrough-data"><summary>输入输出、完整数据与源码</summary></details>';
+    aside.querySelector('.walkthrough-data').append(inspector);
+    layout.append(aside);
+    const story = aside.querySelector('.walkthrough-story');
     let index = 0, playing = false, timer;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     const play = controls.querySelector('[data-action="play"]');
     const range = controls.querySelector('input');
-    const speed = controls.querySelector('select');
+    const speed = controls.querySelector('[aria-label="播放速度"]');
     function pause() {
       playing = false;
       clearTimeout(timer);
@@ -52,7 +58,10 @@
       controls.querySelector('[data-action="previous"]').disabled = index === 0;
       controls.querySelector('[data-action="next"]').disabled = index === flow.steps.length - 1;
       controls.querySelectorAll('[data-step]').forEach(button => button.setAttribute('aria-current', String(flow.steps[Number(button.dataset.step)].phase === step.phase)));
-      controls.querySelector('.walkthrough-story').innerHTML = `<h2>${esc(step.title)}</h2><p>${esc(step.text)}</p><small>${esc(step.evidence)}</small>`;
+      story.innerHTML = `<h2>${esc(step.title)}</h2><p>${esc(step.text)}</p><small>${esc(step.evidence)}</small>`;
+      const excerpt = sample => { const text = pretty(sample); return text.length > 360 ? text.slice(0,360) + '\n…（展开查看完整数据）' : text; };
+      aside.querySelector('.walkthrough-glance').innerHTML = `<small>输入 · ${esc(step.input.label)} · ${esc(step.input.format)}</small><pre>${esc(excerpt(step.input.sample))}</pre><small>输出 · ${esc(step.output.label)} · ${esc(step.output.format)}</small><pre>${esc(excerpt(step.output.sample))}</pre><details><summary>样本来源</summary><p>${esc(flow.evidence)}</p></details>`;
+      controls.querySelector('[aria-label="演示阶段"]').value = flow.steps.findIndex(s => s.phase === step.phase);
       svg.querySelectorAll('.visual-node').forEach(node => {
         node.classList.toggle('walkthrough-active', step.nodes.includes(node.dataset.node));
         node.classList.toggle('walkthrough-muted', !step.nodes.includes(node.dataset.node));
@@ -94,11 +103,14 @@
     });
     range.addEventListener('input', () => { pause();index = Number(range.value);draw(); });
     speed.addEventListener('change', () => { draw();schedule(); });
+    controls.querySelector('[aria-label="演示阶段"]').addEventListener('change', event => { pause();index=Number(event.target.value);draw(); });
+    aside.addEventListener('click', () => pause());
+    window.pauseWalkthrough = pause;
     card.addEventListener('click', event => { if (event.target.closest('.source-link, .visual-node, .walkthrough-full, .walkthrough-sources a')) pause(); });
     card.addEventListener('keydown', event => { if (event.target.closest('.visual-node') && ['Enter', ' '].includes(event.key)) pause(); });
     const onVisibility = () => { if (document.hidden) pause(); };
     document.addEventListener('visibilitychange', onVisibility);
-    window.disposeWalkthrough = () => { pause();document.removeEventListener('visibilitychange', onVisibility); };
+    window.disposeWalkthrough = () => { pause();window.pauseWalkthrough=undefined;document.removeEventListener('visibilitychange', onVisibility); };
     draw();
   };
 })();

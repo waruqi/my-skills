@@ -18,9 +18,10 @@
       if (d.after) document.getElementById(`section-${d.after}`).after(card);
       let zoom = 1;
       const select = (node) => {
-        if (node.target) { location.hash = node.target; return; }
+        if (node.target) { if (window.navigateGuide) window.navigateGuide(node.target); else location.hash = node.target; return; }
         card.querySelectorAll(".visual-node").forEach((el) => el.classList.toggle("selected", el.dataset.node === node.id));
         if (node.section) {
+          window.revealGuideSection?.(node.section);
           const section = document.getElementById(`section-${node.section}`);
           document.querySelectorAll('.section.selected').forEach(el => el.classList.remove('selected'));
           section.classList.add('selected');

@@ -57,3 +57,9 @@
 每步为 `{id,title,phase,text,evidence,nodes,edges,input,output,screen,refs?,page?,data?}`。id 唯一；phase 是简短阶段名，用于跳转。nodes 是本步高亮的图节点 ID 数组，edges 是本步高亮连线的零起始下标数组，箭头方向必须与数据流一致；没有跨模块传输时可为空。input/output 是 `{label,format,sample}`，分别说明来源、去向和实际格式。screen 为 `{title,text}`，展示当前用户看到的结果，模拟界面要在 title 或 evidence 标注。refs 使用已有源码引用格式；page 链接已有模块页；data 放完整请求体或长样本，默认折叠。样本中的文件 path 必须放在 sample/data 内，不能误识别为源码引用。
 
 steps 用同一个任务，展示每轮请求如何加入上一轮结果，不能只换步骤标题。安装、外部响应、UI 与存储如果没有实跑，应逐步标明。播放状态不进入项目源码，不触发真实副作用。构建器检查步骤、节点、连线、目标页面和输入输出；作者仍须核对真实执行顺序和数据含义。
+
+## 连续讲解
+
+顶层可增加 `lesson: {slides}`。每项为 `{page,title,chapter,note,next?,diagram?,steps?,refs?,example?}`：page 引用已有页面；title 是本页要解释的内容，chapter 为章节名，note 是连续讲解正文，next 为衔接下一页的短句。diagram 可指定属于该页的图；steps 为动画的闭区间 `[起始下标,结束下标]`，必须对应所选动画图。refs 复用源码引用，可用 `excerptLines`（1–60，默认 24）指定片段长度，并在 note 解释关键行。example 是短命令或数据字符串。
+
+设置 lesson 后，空地址与 #overview 默认进入讲解第一页；#lesson/数字 定位某页，#explore/页面ID 自由查看，#reference/页面ID 打开完整资料。讲解引用已有图和动画，不重复生成所有模块。未设置 lesson 的项目仍是原有资料模式。所有项目名、课程顺序、讲解与代码选择由分析者从目标项目提取。验收课程时实际顺着翻页阅读，检查前后关系、图与代码对应、动画步骤范围、全屏、自由下钻返回和窄屏。

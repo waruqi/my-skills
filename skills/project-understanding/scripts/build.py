@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from history import build_history
 from walkthrough import validate_walkthroughs
+from lesson import validate_lesson
 
 
 def build(root, content_path, out):
@@ -82,6 +83,7 @@ def build(root, content_path, out):
         if page["parent"] is not None and page["id"] not in links[page["parent"]]:
             raise ValueError(f"父页的图无法进入子页: {page['id']}")
     validate_walkthroughs(pages, content["diagrams"])
+    validate_lesson(content, pages)
     tracked = set(subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode().split("\0"))
     sources = {}
 
@@ -116,7 +118,10 @@ def build(root, content_path, out):
                 if not matches:
                     raise ValueError(f"源码声明未找到: {path} {value.get('symbol')}")
                 start = matches[0]
-                value.update(line=start + 1, excerpt="\n".join(lines[start:start + 24]))
+                count = value.get("excerptLines", 24)
+                if type(count) is not int or not 1 <= count <= 60:
+                    raise ValueError("excerptLines 必须是 1–60 的整数")
+                value.update(line=start + 1, excerpt="\n".join(lines[start:start + count]))
             for key, child in value.items():
                 if key not in ("data", "excerpt", "sample", "media"):
                     resolve(child)
@@ -162,7 +167,7 @@ def build(root, content_path, out):
     content.update(sources=sources, revision=revision.stdout.strip() if revision.returncode == 0 else "uncommitted")
     out.mkdir(parents=True, exist_ok=True)
     assets = Path(__file__).resolve().parent.parent / "assets"
-    for name in ("index.html", "style.css", "app.js", "visuals.js", "source.js", "files.js", "history.js", "walkthrough.js", "walkthrough.css"):
+    for name in ("index.html", "style.css", "app.js", "visuals.js", "source.js", "files.js", "history.js", "walkthrough.js", "walkthrough.css", "lesson.js", "lesson.css"):
         shutil.copyfile(assets / name, out / name)
     encoded = json.dumps(content, ensure_ascii=False).replace("</", "<\\/")
     (out / "data.js").write_text("window.GUIDE = " + encoded + ";\n")
