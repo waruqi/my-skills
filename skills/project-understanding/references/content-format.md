@@ -49,3 +49,11 @@
 复用现有页面和图协议，不增加写死的设计分类。可用 flow 或 subsystem 页面承载主线与设计专题，由首页的 target 节点进入，专题再连接已有模块和源码。每个专题仍需顶部图；对照图标明简单方案是教学假设，箭头表达数据或状态变化。用 exchange 放关键差异的短样本，用 sections.text 说明问题、原因、代价和证据，refs 指向决定行为的实现；补充机制可用 after 内嵌图。专题标题与重点从目标项目提取，不使用固定亮点模板。
 
 页面可选 `featuredLabel` 和 `featuredDescription`：前者是简短的独立导航名称，后者说明读者会看到什么。模板在顶部导航、侧栏顶部和首页标题下生成可点击入口，并标记专题及子页的当前位置；隐藏侧栏后顶部入口仍保留。不设置这些字段的项目不显示额外入口。入口名称和目标页面来自内容，不在模板中写死。
+
+## 完整流程动画
+
+页面可增加 `walkthrough: {diagram, evidence, steps}`。diagram 指向属于本页的顶部图；evidence 概括验证范围。使用 featuredLabel/featuredDescription 给动画独立入口。模板复用图节点与连线，不包含项目专属结构。
+
+每步为 `{id,title,phase,text,evidence,nodes,edges,input,output,screen,refs?,page?,data?}`。id 唯一；phase 是简短阶段名，用于跳转。nodes 是本步高亮的图节点 ID 数组，edges 是本步高亮连线的零起始下标数组，箭头方向必须与数据流一致；没有跨模块传输时可为空。input/output 是 `{label,format,sample}`，分别说明来源、去向和实际格式。screen 为 `{title,text}`，展示当前用户看到的结果，模拟界面要在 title 或 evidence 标注。refs 使用已有源码引用格式；page 链接已有模块页；data 放完整请求体或长样本，默认折叠。样本中的文件 path 必须放在 sample/data 内，不能误识别为源码引用。
+
+steps 用同一个任务，展示每轮请求如何加入上一轮结果，不能只换步骤标题。安装、外部响应、UI 与存储如果没有实跑，应逐步标明。播放状态不进入项目源码，不触发真实副作用。构建器检查步骤、节点、连线、目标页面和输入输出；作者仍须核对真实执行顺序和数据含义。

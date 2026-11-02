@@ -24,6 +24,8 @@
   }
 
   function render() {
+    window.disposeWalkthrough?.();
+    window.disposeWalkthrough = undefined;
     const id = location.hash.slice(1) || "overview";
     document.querySelectorAll('[data-featured]').forEach(link => {
       let current = g.pages.find(page => page.id === id);
@@ -46,6 +48,7 @@
     document.querySelector("#breadcrumbs").innerHTML = ancestors.map((p,i) => `${i ? '<span aria-hidden="true"> / </span>' : ''}${p.id === page.id ? `<span aria-current="page">${esc(p.title)}</span>` : `<a href="#${esc(p.id)}">${esc(p.title)}</a>`}`).join("");
     main.innerHTML = `<header class="hero"><div class="eyebrow">第 ${ancestors.length} 层 · ${esc({overview:'系统全景',subsystem:'子架构',module:'模块',flow:'运行过程',code:'实现与代码'}[page.kind])}</div><h1>${esc(page.title)}</h1><p class="lead">${esc(page.summary)}</p>${page.id === "overview" ? featuredHtml() : ""}</header>${exchangeHtml(page.exchange)}<article class="explanation">${page.sections.map(s => `<section class="section" id="section-${esc(s.id)}" tabindex="-1"><h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>${s.media ? `<figure class="product-screen"><img src="${esc(s.media.src)}" alt="${esc(s.media.alt)}" loading="lazy"><figcaption>${esc(s.media.caption)}</figcaption></figure>` : ''}${s.data ? `<div class="samples">${Object.entries(s.data).map(([label,value]) => `<details class="sample" open><summary>${esc(label)}</summary><pre>${esc(typeof value === 'string' ? value : JSON.stringify(value,null,2))}</pre></details>`).join('')}</div>` : ''}${(s.refs || []).map(r => `<div class="code-evidence"><p>${esc(r.note || '从这里看对应实现')}</p><button class="source-link" data-source="${esc(r.path)}" data-line="${r.line}">${esc(r.path)}:${r.line} · 打开完整源码</button><details ${page.kind === 'code' ? 'open' : ''}><summary>查看关键片段（从第 ${r.line} 行起）</summary><pre>${esc(r.excerpt)}</pre></details></div>`).join('')}</section>`).join('')}</article>${page.parent ? `<footer><a href="#${esc(page.parent)}">← 返回上层架构图</a></footer>` : ''}`;
     window.renderAtlasVisuals(page.id);
+    window.renderWalkthrough(page);
     window.decorateSourceExcerpts();
     window.scrollTo(0,0);
   }
