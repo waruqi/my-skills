@@ -55,6 +55,17 @@ def build(root, content_path, out):
         if diagram["id"] in diagram_ids or not diagram["nodes"]:
             raise ValueError("图 ID 重复或没有节点")
         diagram_ids.add(diagram["id"])
+        if diagram.get("type", "architecture") not in ("architecture", "sequence", "swimlane", "state", "hierarchy", "dataflow", "comparison"):
+            raise ValueError(f"无效图类型: {diagram['id']}")
+        for node in diagram["nodes"]:
+            if node.get("shape", "box") not in ("box", "decision", "terminal", "state", "record"):
+                raise ValueError(f"无效节点形状: {node['id']}")
+            rows = node.get("rows", [])
+            if not isinstance(rows, list) or any(not isinstance(row, str) for row in rows):
+                raise ValueError("节点 rows 必须是文本数组")
+            if rows and node.get("h", 70) < 76 + len(rows) * 40:
+                raise ValueError("数据节点高度不足以容纳 rows")
+
         if not diagram["pages"] or any(id not in pages for id in diagram["pages"]):
             raise ValueError(f"图引用了无效页面: {diagram['id']}")
         coverage.update(diagram["pages"])

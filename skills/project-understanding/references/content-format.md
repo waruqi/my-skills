@@ -63,3 +63,10 @@ steps 用同一个任务，展示每轮请求如何加入上一轮结果，不�
 顶层可增加 `lesson: {slides}`。每项为 `{page,title,chapter,note,next?,diagram?,steps?,refs?,example?}`：page 引用已有页面；title 是本页要解释的内容，chapter 为章节名，note 是连续讲解正文，next 为衔接下一页的短句。diagram 可指定属于该页的图；steps 为动画的闭区间 `[起始下标,结束下标]`，必须对应所选动画图。refs 复用源码引用，可用 `excerptLines`（1–60，默认 24）指定片段长度，并在 note 解释关键行。example 是短命令或数据字符串。
 
 设置 lesson 后，空地址与 #overview 默认进入讲解第一页；#lesson/数字 定位某页，#explore/页面ID 自由查看，#reference/页面ID 打开完整资料。讲解引用已有图和动画。课程要在入门之后继续覆盖子系统、模块和关键实现，不能以少量概览页结束；已有普通页面地址也进入对应讲解，模块下钻仍可继续翻页。进入动画页默认播放，最后一步停止；保留暂停及减少动态效果支持。详情覆盖整个视口，返回后保留原页。未设置 lesson 的项目仍是原有资料模式。所有项目名、课程顺序、讲解与代码选择由分析者从目标项目提取。验收课程时实际顺着翻页阅读，检查前后关系、图与代码对应、动画步骤范围、全屏、自由下钻返回和窄屏。
+
+
+## 多图型与语义节点
+
+图可设 type 为 architecture（默认）、sequence、swimlane、state、hierarchy、dataflow、comparison。复用统一 SVG 与交互；实际布局必须表达图型含义。sequence 使用参与者、lifelines 和按时间排列的调用/返回；swimlane 使用 bands 划分责任方；state 的边标触发条件；hierarchy 的结构边设置 arrow:false。不要用图型名掩盖普通列表。
+
+节点 shape 为 box（默认）、decision（菱形）、terminal（椭圆）、state（圆角状态）、record（数据卡片）。record 可设 rows 为短文本数组，每行展示一个实际字段或消息摘要；高度至少为 76 + 40 × 行数。样本来源与省略范围写在 caption 和正文。边可设 arrow:false 隐藏箭头以表达归属关系。形状仍保留 target/section、键盘与动画节点 ID，不用另建无法下钻的图片。

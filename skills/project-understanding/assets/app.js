@@ -60,5 +60,5 @@
   }
 
   window.addEventListener("hashchange", render);
-  render();
+  try { render(); } finally { document.documentElement.classList.remove('guide-loading'); }
 })();
