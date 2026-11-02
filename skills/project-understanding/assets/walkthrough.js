@@ -111,6 +111,9 @@
     const onVisibility = () => { if (document.hidden) pause(); };
     document.addEventListener('visibilitychange', onVisibility);
     window.disposeWalkthrough = () => { pause();window.pauseWalkthrough=undefined;document.removeEventListener('visibilitychange', onVisibility); };
+    playing = flow.steps.length > 1 && !document.hidden;
+    if (playing) { play.textContent = '暂停'; play.setAttribute('aria-pressed', 'true'); }
     draw();
+    schedule();
   };
 })();

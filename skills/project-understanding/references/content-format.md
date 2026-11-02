@@ -48,11 +48,11 @@
 
 复用现有页面和图协议，不增加写死的设计分类。可用 flow 或 subsystem 页面承载主线与设计专题，由首页的 target 节点进入，专题再连接已有模块和源码。每个专题仍需顶部图；对照图标明简单方案是教学假设，箭头表达数据或状态变化。用 exchange 放关键差异的短样本，用 sections.text 说明问题、原因、代价和证据，refs 指向决定行为的实现；补充机制可用 after 内嵌图。专题标题与重点从目标项目提取，不使用固定亮点模板。
 
-页面可选 `featuredLabel` 和 `featuredDescription`：前者是简短的独立导航名称，后者说明读者会看到什么。模板在顶部导航、侧栏顶部和首页标题下生成可点击入口，并标记专题及子页的当前位置；隐藏侧栏后顶部入口仍保留。不设置这些字段的项目不显示额外入口。入口名称和目标页面来自内容，不在模板中写死。
+页面可选 `featuredLabel` 和 `featuredDescription`：前者是简短的独立导航名称，后者说明读者会看到什么。未设置 lesson 时，模板在顶部导航、侧栏顶部和首页标题下生成可点击入口，并标记专题及子页的当前位置；隐藏侧栏后顶部入口仍保留。不设置这些字段的项目不显示额外入口。入口名称和目标页面来自内容，不在模板中写死。
 
 ## 完整流程动画
 
-页面可增加 `walkthrough: {diagram, evidence, steps}`。diagram 指向属于本页的顶部图；evidence 概括验证范围。使用 featuredLabel/featuredDescription 给动画独立入口。模板复用图节点与连线，不包含项目专属结构。
+页面可增加 `walkthrough: {diagram, evidence, steps}`。diagram 指向属于本页的顶部图；evidence 概括验证范围。设置 lesson 时把动画编排进课程，不显示独立专题导航。模板复用图节点与连线，不包含项目专属结构。
 
 每步为 `{id,title,phase,text,evidence,nodes,edges,input,output,screen,refs?,page?,data?}`。id 唯一；phase 是简短阶段名，用于跳转。nodes 是本步高亮的图节点 ID 数组，edges 是本步高亮连线的零起始下标数组，箭头方向必须与数据流一致；没有跨模块传输时可为空。input/output 是 `{label,format,sample}`，分别说明来源、去向和实际格式。screen 为 `{title,text}`，展示当前用户看到的结果，模拟界面要在 title 或 evidence 标注。refs 使用已有源码引用格式；page 链接已有模块页；data 放完整请求体或长样本，默认折叠。样本中的文件 path 必须放在 sample/data 内，不能误识别为源码引用。
 
@@ -62,4 +62,4 @@ steps 用同一个任务，展示每轮请求如何加入上一轮结果，不�
 
 顶层可增加 `lesson: {slides}`。每项为 `{page,title,chapter,note,next?,diagram?,steps?,refs?,example?}`：page 引用已有页面；title 是本页要解释的内容，chapter 为章节名，note 是连续讲解正文，next 为衔接下一页的短句。diagram 可指定属于该页的图；steps 为动画的闭区间 `[起始下标,结束下标]`，必须对应所选动画图。refs 复用源码引用，可用 `excerptLines`（1–60，默认 24）指定片段长度，并在 note 解释关键行。example 是短命令或数据字符串。
 
-设置 lesson 后，空地址与 #overview 默认进入讲解第一页；#lesson/数字 定位某页，#explore/页面ID 自由查看，#reference/页面ID 打开完整资料。讲解引用已有图和动画，不重复生成所有模块。未设置 lesson 的项目仍是原有资料模式。所有项目名、课程顺序、讲解与代码选择由分析者从目标项目提取。验收课程时实际顺着翻页阅读，检查前后关系、图与代码对应、动画步骤范围、全屏、自由下钻返回和窄屏。
+设置 lesson 后，空地址与 #overview 默认进入讲解第一页；#lesson/数字 定位某页，#explore/页面ID 自由查看，#reference/页面ID 打开完整资料。讲解引用已有图和动画。课程要在入门之后继续覆盖子系统、模块和关键实现，不能以少量概览页结束；已有普通页面地址也进入对应讲解，模块下钻仍可继续翻页。进入动画页默认播放，最后一步停止；保留暂停及减少动态效果支持。详情覆盖整个视口，返回后保留原页。未设置 lesson 的项目仍是原有资料模式。所有项目名、课程顺序、讲解与代码选择由分析者从目标项目提取。验收课程时实际顺着翻页阅读，检查前后关系、图与代码对应、动画步骤范围、全屏、自由下钻返回和窄屏。

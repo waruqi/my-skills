@@ -16,12 +16,18 @@
       if (!page) return {invalid:true};
       return {index:null, slide:{page:page.id, title:page.title, chapter:'自由查看', note:page.summary}};
     }
+    const page = window.GUIDE.pages.find(p => p.id === route);
+    if (page) {
+      const index = lesson.slides.findIndex(s => s.page === page.id);
+      if (index >= 0) { resume = index; return {index, slide:lesson.slides[index]}; }
+    }
     return null;
   };
   window.renderLesson = (page, route) => {
     const main = document.querySelector('main');
     const slides = window.GUIDE.lesson.slides;
     const {slide, index} = route;
+    const cursor = index === null ? slides.findIndex(item => item.page === page.id) : index;
     document.body.classList.add('lesson-mode');
     const diagrams = window.GUIDE.diagrams.filter(d => d.pages.includes(page.id));
     const diagramId = slide.diagram || page.walkthrough?.diagram || diagrams.find(d => !d.after).id;
@@ -30,18 +36,23 @@
     archive.className = 'lesson-archive';
     while (main.firstChild) archive.append(main.firstChild);
     const chapters = [...new Set(slides.map(s => s.chapter))];
-    main.innerHTML = `<div class="lesson-shell"><nav class="lesson-bar" aria-label="讲解控制"><button data-lesson="previous" ${index === null || index === 0 ? 'disabled' : ''}>上一页</button><span class="lesson-count">${index === null ? '自由查看' : `${index + 1} / ${slides.length}`}</span><button data-lesson="next" ${index === null || index === slides.length - 1 ? 'disabled' : ''}>下一页</button><select aria-label="讲解目录"><option value="">按章节跳转</option>${chapters.map(chapter => `<optgroup label="${esc(chapter)}">${slides.map((s,i) => s.chapter === chapter ? `<option value="${i}" ${index === i ? 'selected' : ''}>${i+1}. ${esc(s.title)}</option>` : '').join('')}</optgroup>`).join('')}</select><select aria-label="选择模块"><option value="">查看任意模块</option>${window.GUIDE.pages.filter(p => ['subsystem','module'].includes(p.kind)).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('')}</select><button data-lesson="resume">返回讲解</button><button data-lesson="fullscreen">全屏</button><a href="#reference/${esc(page.id)}">资料 / 文件 / Git</a></nav><header class="lesson-title"><small>${esc(slide.chapter)}</small><h1>${esc(slide.title)}</h1></header><div class="lesson-stage"><div class="lesson-visual"></div><aside class="lesson-notes" aria-label="本页讲解"><div class="lesson-note"><div class="lesson-note-label">讲解 <button data-lesson="speak" disabled>朗读</button></div><p>${esc(slide.note)}</p>${slide.example ? `<pre>${esc(slide.example)}</pre>` : ''}</div><div class="lesson-live"></div><div class="lesson-code">${(slide.refs || []).map(ref => `<div class="code-evidence"><p>${esc(ref.note)}</p><button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line}">${esc(ref.path)}:${ref.line} · 完整源码</button><pre>${esc(ref.excerpt)}</pre></div>`).join('')}</div><button data-lesson="details">展开本页完整说明与数据</button></aside></div><div class="lesson-footer">${esc(slide.next || (index === null ? '点击图中模块继续下钻，或返回刚才的讲解。' : '看完这一页，点击下一页继续。'))}<span class="lesson-status" role="status"></span></div></div>`;
+    main.innerHTML = `<div class="lesson-shell"><nav class="lesson-bar" aria-label="讲解控制"><a class="lesson-home" href="#overview" title="回到讲解首页">首页</a><button data-lesson="back" title="返回刚才查看的页面">返回</button><button data-lesson="previous" ${cursor <= 0 ? 'disabled' : ''}>上一页</button><span class="lesson-count">${cursor < 0 ? '模块' : `${cursor + 1} / ${slides.length}`}</span><button data-lesson="next" ${cursor < 0 || cursor === slides.length - 1 ? 'disabled' : ''}>下一页</button><select aria-label="讲解目录"><option value="">按章节跳转</option>${chapters.map(chapter => `<optgroup label="${esc(chapter)}">${slides.map((s,i) => s.chapter === chapter ? `<option value="${i}" ${index === i ? 'selected' : ''}>${i+1}. ${esc(s.title)}</option>` : '').join('')}</optgroup>`).join('')}</select><details class="lesson-more"><summary>更多</summary><div><select aria-label="选择模块"><option value="">查看任意模块</option>${window.GUIDE.pages.filter(p => ['subsystem','module'].includes(p.kind)).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('')}</select><button data-lesson="resume">返回讲解进度</button><a href="#reference/${esc(page.id)}">文件与 Git</a></div></details><button data-lesson="focus">放大图</button><button data-lesson="fullscreen">全屏</button></nav><header class="lesson-title"><small>${esc(slide.chapter)}</small><h1>${esc(slide.title)}</h1></header><div class="lesson-stage"><div class="lesson-visual"></div><aside class="lesson-notes" aria-label="本页讲解"><div class="lesson-note"><div class="lesson-note-label">讲解 <button data-lesson="speak" disabled>朗读</button></div><p>${esc(slide.note)}</p>${slide.example ? `<pre>${esc(slide.example)}</pre>` : ''}</div><div class="lesson-live"></div><div class="lesson-code">${(slide.refs || []).map(ref => `<div class="code-evidence"><p>${esc(ref.note)}</p><button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line}">${esc(ref.path)}:${ref.line} · 完整源码</button><pre>${esc(ref.excerpt)}</pre></div>`).join('')}</div><button data-lesson="details">展开本页完整说明与数据</button></aside></div><div class="lesson-footer">${esc(slide.next || (index === null ? '点击图中模块继续下钻，或返回刚才的讲解。' : '看完这一页，点击下一页继续。'))}<span class="lesson-status" role="status"></span></div></div>`;
     main.querySelector('.lesson-visual').append(card);
+    const svg = card.querySelector('svg');
+    const bounds = svg.getBBox();
+    svg.setAttribute('viewBox', `${bounds.x-18} ${bounds.y-18} ${bounds.width+36} ${bounds.height+36}`);
     const live = card.querySelector('.walkthrough-aside');
     if (live) main.querySelector('.lesson-live').append(live);
     const drawer = document.createElement('dialog');
     drawer.className = 'lesson-details';
     drawer.setAttribute('aria-label','完整说明与数据');
-    drawer.innerHTML = '<button class="lesson-close">关闭说明</button>';
+    drawer.innerHTML = '<nav class="lesson-detail-bar"><button class="lesson-close">返回讲解</button><a href="#overview">首页</a><span>完整说明与数据</span></nav>';
     drawer.append(archive);
     main.append(drawer);
     drawer.querySelector('.lesson-close').onclick = () => drawer.close();
-    const openDetails = () => { window.pauseWalkthrough?.(); if (!drawer.open) drawer.show(); };
+    drawer.addEventListener('close', () => { main.querySelector('.lesson-shell').inert = false; main.querySelector('[data-lesson=details]').focus(); });
+    drawer.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); drawer.close(); } });
+    const openDetails = () => { window.pauseWalkthrough?.(); if (!drawer.open) { drawer.show(); main.querySelector('.lesson-shell').inert = true; drawer.querySelector('.lesson-close').focus(); } };
     window.navigateGuide = id => { location.hash = `explore/${id}`; };
     window.revealGuideSection = openDetails;
     const speech = window.speechSynthesis;
@@ -54,10 +65,12 @@
     const fullscreenButton = main.querySelector('[data-lesson=fullscreen]');
     const updateFullscreen = () => { fullscreenButton.textContent = document.fullscreenElement ? '退出全屏' : '全屏'; };
     updateFullscreen();document.addEventListener('fullscreenchange',updateFullscreen);
-    const go = delta => { if (index !== null && slides[index+delta]) location.hash=`lesson/${index+delta}`; };
+    const go = delta => { if (cursor >= 0 && slides[cursor+delta]) location.hash=`lesson/${cursor+delta}`; };
     main.querySelector('.lesson-shell').addEventListener('click', async event => {
       if (event.target.closest('.source-link')) { window.pauseWalkthrough?.();stopSpeech(); }
       const action = event.target.closest('[data-lesson]')?.dataset.lesson;
+      if (action === 'back') { if (history.length > 1) history.back(); else location.hash='overview'; }
+      if (action === 'focus') { const expanded = main.querySelector('.lesson-shell').classList.toggle('lesson-graph-only'); event.target.textContent = expanded ? '显示讲解' : '放大图'; }
       if (action === 'previous') go(-1);
       if (action === 'next') go(1);
       if (action === 'resume') location.hash = `lesson/${resume}`;

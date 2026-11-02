@@ -7,7 +7,7 @@
   document.querySelector("#project-home").textContent = g.title;
   document.querySelector("#revision").textContent = g.revision.slice(0, 12);
 
-  const featured = g.pages.filter(page => page.featuredLabel);
+  const featured = g.lesson ? [] : g.pages.filter(page => page.featuredLabel);
   const featuredLinks = featured.map(page => `<a href="#${esc(page.id)}" data-featured="${esc(page.id)}">${esc(page.featuredLabel)}</a>`).join('');
   if (featured.length) {
     document.querySelector('#project-home').insertAdjacentHTML('afterend', `<nav class="featured-nav" aria-label="专题">${featuredLinks}</nav>`);
