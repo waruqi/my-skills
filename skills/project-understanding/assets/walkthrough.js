@@ -62,6 +62,7 @@
       const excerpt = sample => { const text = pretty(sample); return text.length > 360 ? text.slice(0,360) + '\n…（展开查看完整数据）' : text; };
       aside.querySelector('.walkthrough-glance').innerHTML = `<small>输入 · ${esc(step.input.label)} · ${esc(step.input.format)}</small><pre>${esc(excerpt(step.input.sample))}</pre><small>输出 · ${esc(step.output.label)} · ${esc(step.output.format)}</small><pre>${esc(excerpt(step.output.sample))}</pre><details><summary>样本来源</summary><p>${esc(flow.evidence)}</p></details>`;
       controls.querySelector('[aria-label="演示阶段"]').value = flow.steps.findIndex(s => s.phase === step.phase);
+      controls.querySelector('[aria-label="演示阶段"]').dispatchEvent(new Event('guide-value'));
       svg.querySelectorAll('.visual-node').forEach(node => {
         node.classList.toggle('walkthrough-active', step.nodes.includes(node.dataset.node));
         node.classList.toggle('walkthrough-muted', !step.nodes.includes(node.dataset.node));
