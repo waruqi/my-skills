@@ -70,3 +70,5 @@ steps 用同一个任务，展示每轮请求如何加入上一轮结果，不�
 图可设 type 为 architecture（默认）、sequence、swimlane、state、hierarchy、dataflow、comparison。复用统一 SVG 与交互；实际布局必须表达图型含义。sequence 使用参与者、lifelines 和按时间排列的调用/返回；swimlane 使用 bands 划分责任方；state 的边标触发条件；hierarchy 的结构边设置 arrow:false。不要用图型名掩盖普通列表。
 
 节点 shape 为 box（默认）、decision（菱形）、terminal（椭圆）、state（圆角状态）、record（数据卡片）。record 可设 rows 为短文本数组，每行展示一个实际字段或消息摘要；高度至少为 76 + 40 × 行数。样本来源与省略范围写在 caption 和正文。边可设 arrow:false 隐藏箭头以表达归属关系。形状仍保留 target/section、键盘与动画节点 ID，不用另建无法下钻的图片。
+
+讲解页可增加 `media: {file, alt, caption}`，与段落图片使用同一校验和离线嵌入规则。讲解侧显示缩略图，点击打开完整说明；应在该页段落中同时提供对应图片与说明。图中 target 若已属于课程，则进入其正式讲解页，保留 example、图片和连续翻页。
