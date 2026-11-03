@@ -12,6 +12,7 @@
     back:'<path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 0 14"/>',
     previous:'<path d="m14 5-7 7 7 7"/>', next:'<path d="m10 5 7 7-7 7"/>',
     more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    history:'<path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/>',
     fullscreen:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
     exit:'<path d="M3 8h5V3m8 0v5h5M8 21v-5H3m13 5v-5h5"/>',
     moon:'<path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/>',
@@ -97,6 +98,20 @@
     const chapters = [...new Set(slides.map(s => s.chapter))];
     main.innerHTML = `<div class="lesson-shell ${slide.layout==='cover'?'lesson-cover':''}"><nav class="lesson-bar" aria-label="讲解控制"><a class="lesson-home" href="#overview" title="回到讲解首页">首页</a><button data-lesson="back" title="返回刚才查看的页面">返回</button><button data-lesson="previous" ${cursor <= 0 ? 'disabled' : ''}>上一页</button><span class="lesson-count">${cursor < 0 ? '模块' : `${cursor + 1} / ${slides.length}`}</span><button data-lesson="next" ${cursor < 0 || cursor === slides.length - 1 ? 'disabled' : ''}>下一页</button><select aria-label="讲解目录"><option value="">按章节跳转</option>${chapters.map(chapter => `<optgroup label="${esc(chapter)}">${slides.map((s,i) => s.chapter === chapter ? `<option value="${i}" ${index === i ? 'selected' : ''}>${i+1}. ${esc(s.title)}</option>` : '').join('')}</optgroup>`).join('')}</select><details class="lesson-more"><summary>更多</summary><div><select aria-label="选择模块"><option value="">查看任意模块</option>${window.GUIDE.pages.filter(p => ['subsystem','module'].includes(p.kind)).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('')}</select><button data-lesson="resume">返回讲解进度</button><a href="#reference/${esc(page.id)}">文件与 Git</a></div></details><button data-lesson="focus">放大图</button><button data-lesson="fullscreen">全屏</button><button data-lesson="theme">夜间模式</button></nav><header class="lesson-title"><small>${esc(slide.chapter)}</small><h1>${esc(slide.title)}</h1></header><div class="lesson-stage"><div class="lesson-visual"></div><aside class="lesson-notes" aria-label="本页讲解"><nav class="lesson-tabs" aria-label="讲解与代码"><button data-lesson="explain" aria-pressed="true">讲解</button><button data-lesson="code" aria-pressed="false">关键代码 <small>${refs.length}</small></button></nav><div class="lesson-note"><div class="lesson-note-label">讲解 <button data-lesson="speak" disabled>朗读</button></div>${slide.media ? `<figure class="lesson-preview"><button data-lesson="preview" aria-label="放大界面示例"><img src="${esc(slide.media.src)}" alt="${esc(slide.media.alt)}"></button><figcaption>${esc(slide.media.caption)}</figcaption></figure>` : ''}<p>${esc(slide.note)}</p>${slide.example ? `<pre>${esc(slide.example)}</pre>` : ''}</div>${slide.historyCommit ? `<a class="lesson-history-link" data-history-lesson href="#history/${esc(slide.historyCommit)}">查看这次提交的代码 diff ↗</a>` : ''}${slide.actions ? `<nav class="lesson-actions">${slide.actions.map(a=>`<a href="#${esc(a.route)}">${esc(a.label)}</a>`).join('')}</nav>` : ''}<div class="lesson-live"></div><div class="lesson-code">${refs.map(ref => `<div class="code-evidence"><small>${esc(ref.owner)}</small><p>${esc(ref.note || '对应实现；点击文件名查看完整上下文。')}</p><button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line}">${esc(ref.path)}:${ref.line} · ${isDocument(ref) ? "查看完整文档" : "查看完整源码"}</button><pre>${esc(ref.excerpt)}</pre></div>`).join('')}</div><button data-lesson="details">展开本页完整说明与数据</button></aside></div><div class="lesson-footer">${esc(slide.next || (index === null ? '点击图中模块继续下钻，或返回刚才的讲解。' : '看完这一页，点击下一页继续。'))}<span class="lesson-status" role="status"></span></div></div>`;
     for(const [selector,name,label] of [['.lesson-home','home','首页'],['[data-lesson=back]','back','返回刚才页面'],['[data-lesson=previous]','previous','上一页'],['[data-lesson=next]','next','下一页'],['.lesson-more>summary','more','更多'],['[data-lesson=focus]','focus','放大图']]) setIcon(main.querySelector(selector),name,label);
+    const gitSlides=slides.map((s,i)=>s.historyCommit?i:-1).filter(i=>i>=0);
+    if(gitSlides.length){
+      const link=document.createElement('a');link.href=`#lesson/${gitSlides[0]}`;link.dataset.gitLesson='';
+      setIcon(link,'history','Git 最近提交分析');main.querySelector('.lesson-more').before(link);
+      if(slide.layout==='cover'){
+        let actions=main.querySelector('.lesson-actions');
+        if(!actions){actions=document.createElement('nav');actions.className='lesson-actions';main.querySelector('.lesson-note').after(actions);}
+        const entry=document.createElement('a');entry.href=link.href;entry.textContent=`Git 最近提交分析 · ${gitSlides.length} 页`;actions.append(entry);
+      }
+    }
+    if(slide.historyCommit){
+      const diff=main.querySelector('.lesson-history-link');diff.textContent='查看 Git diff · 统一 / 左右对照 ↗';
+      main.querySelector('.lesson-tabs').after(diff);
+    }
     const detailButton=main.querySelector('[data-lesson=details]');detailButton.innerHTML=icon('details')+'<span>详细说明</span>';detailButton.className='lesson-detail-link';
     const themeButton=main.querySelector('[data-lesson=theme]');
     const updateTheme=()=>{const dark=document.documentElement.dataset.theme==='dark';setIcon(themeButton,dark?'sun':'moon',dark?'切换日间模式':'切换夜间模式');themeButton.setAttribute('aria-pressed',String(dark));};updateTheme();
