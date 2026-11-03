@@ -172,6 +172,15 @@ def build(root, content_path, out):
         chunk = "source-files/" + hashlib.sha256(path.encode()).hexdigest()[:24] + ".js"
         item["chunk"] = chunk
         (out / chunk).write_text("window.GUIDE.sources[" + json.dumps(path) + "]=" + json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/") + ";\n")
+    node = shutil.which("node")
+    content["symbols"] = {}
+    if node:
+        indexed = subprocess.run([node, str(Path(__file__).with_name("symbols.mjs")), str(root)],
+                                 input=json.dumps([f["name"] for f in files if f["readable"]]),
+                                 capture_output=True, text=True)
+        if indexed.returncode != 0:
+            raise ValueError(f"符号索引失败: {indexed.stderr}")
+        content["symbols"] = json.loads(indexed.stdout)
     content["files"] = files
     content["history"] = build_history(root, out, content)
     revision = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=root, capture_output=True, text=True)
