@@ -37,6 +37,7 @@
           return;
         }
         const ref = node.ref;
+        if(ref && card.closest('.lesson-visual')) document.dispatchEvent(new CustomEvent('guide-code-ref',{detail:{path:ref.path,line:ref.line||1}}));
         card.querySelector(".visual-detail").innerHTML = `<strong>${esc(node.label)}</strong><p>${esc(node.detail || node.sub)}</p><div class="controls">${ref ? `<button class="source-link" data-source="${esc(ref.path)}" data-line="${ref.line || 1}">${esc(ref.path)}:${ref.line || 1}</button>` : ""}</div>`;
       };
       card.addEventListener("click", (event) => {

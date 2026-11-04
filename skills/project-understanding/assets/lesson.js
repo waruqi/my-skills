@@ -86,12 +86,13 @@
     const addRefs=(items,owner)=>{for(const ref of items){const key=ref.path+':'+ref.line;if(!seenRefs.has(key)){seenRefs.add(key);refs.push({...ref,owner});}}};
     addRefs(slide.refs||[],page.title);
     for(const step of (page.walkthrough?.steps||[]).slice(slide.steps?.[0]||0,slide.steps?slide.steps[1]+1:undefined)) addRefs((step.refs||[]).map(ref=>({...ref,note:ref.note||step.text})),step.title);
-    addRefs(page.sections.flatMap(section=>section.refs||[]),page.title);
+    if(!slide.refs?.length && !slide.diagram) addRefs(page.sections.flatMap(section=>section.refs||[]),page.title);
     addRefs(diagrams.filter(diagram=>diagram.id===diagramId).flatMap(diagram=>diagram.nodes.flatMap(node=>node.ref?[node.ref]:[])),page.title);
     if(!refs.some(ref=>/\.(ts|js|py|go|rs|cpp|c|java|mjs)$/.test(ref.path))){
       const queue=window.GUIDE.pages.filter(item=>item.parent===page.id);
       while(queue.length&&refs.length<8){const child=queue.shift();addRefs(child.sections.flatMap(section=>section.refs||[]),child.title);queue.push(...window.GUIDE.pages.filter(item=>item.parent===child.id));}
     }
+    if(!refs.length) addRefs(page.sections.flatMap(section=>section.refs||[]),page.title);
     const isDocument=ref=>/\.(md|mdx|rst|adoc|txt)$/i.test(ref.path);
     refs.sort((a,b)=>Number(isDocument(a))-Number(isDocument(b)));
     const cleanups=[];
@@ -185,9 +186,20 @@
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'PageDown') {event.preventDefault();go(1);}
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'PageUp') {event.preventDefault();go(-1);}
     };
+    const selectCode = event => {
+      const {path,line}=event.detail;
+      const target=[...main.querySelectorAll('.lesson-code .source-link')].find(button=>button.dataset.source===path&&Number(button.dataset.line)===line);
+      if(!target)return;
+      main.querySelector('[data-lesson=code]').click();
+      main.querySelectorAll('.code-evidence').forEach(item=>item.classList.toggle('selected',item===target.closest('.code-evidence')));
+      target.closest('.code-evidence').scrollIntoView({block:'start'});
+      target.focus({preventScroll:true});
+    };
+    document.addEventListener('guide-code-ref',selectCode);
     const onVisibility = () => { if(document.hidden)stopSpeech(); };
     document.addEventListener('keydown',keydown);document.addEventListener('visibilitychange',onVisibility);
     window.disposeLesson = () => {
+      document.removeEventListener('guide-code-ref',selectCode);
       cleanups.forEach(cleanup=>cleanup());
       stopSpeech();speech?.removeEventListener('voiceschanged',updateVoice);
       document.removeEventListener('fullscreenchange',updateFullscreen);document.removeEventListener('keydown',keydown);document.removeEventListener('visibilitychange',onVisibility);
