@@ -2,7 +2,7 @@
 window.initSourceHistory = ({data,currentFile,openSource}) => {
   const $=id=>document.getElementById(id), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   window.SOURCE_HISTORY={};
-  let scope=(data.history?.commits||[]).some(c=>c.deep)?'deep':'all',selection,selectedFile='',view='unified',request=0,explanationOpen=true;
+  let scope=(data.history?.commits||[]).some(c=>c.deep)?'deep':'all',selection,selectedFile='',view='unified',request=0,explanationOpen=true,contentView='analysis';
   function refresh(){
     document.querySelectorAll('[data-history-scope]').forEach(b=>b.classList.toggle('active',b.dataset.historyScope===scope));
     const q=$('history-filter').value.toLowerCase();
@@ -15,7 +15,7 @@ window.initSourceHistory = ({data,currentFile,openSource}) => {
     $('history-dialog').showModal();$('history-content').innerHTML='<p class="empty">读取提交差异…</p>';
     try{
       if(!window.SOURCE_HISTORY[id])await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=meta.chunk;script.onload=()=>{script.remove();resolve();};script.onerror=()=>{script.remove();reject(new Error('Git 快照加载失败'));};document.head.append(script);});
-      if(token!==request)return;selection=window.SOURCE_HISTORY[id];explanationOpen=true;selectedFile=selection.files.find(f=>f.file===currentFile())?.file||selection.files.find(f=>f.analyzed)?.file||selection.files[0]?.file;render();
+      if(token!==request)return;selection=window.SOURCE_HISTORY[id];explanationOpen=true;contentView='analysis';selectedFile=selection.files.find(f=>f.file===currentFile())?.file||selection.files.find(f=>f.analyzed)?.file||selection.files[0]?.file;render();
     }catch(error){if(token===request)$('history-content').textContent=error.message;}
   }
   function diff(patch){
@@ -37,13 +37,24 @@ window.initSourceHistory = ({data,currentFile,openSource}) => {
   }
   function render(){
     const c=selection,f=c.files.find(f=>f.file===selectedFile);
-    $('history-content').innerHTML=`<section class="commit-summary"><small>${c.working?'工作区对比 HEAD':esc(c.id+' · '+c.author+' · '+c.date)} · ${c.analyzed?'源码分析':'未人工分析'}</small><h2>${esc(c.analysisTitle||c.title)}</h2><p>${esc(c.summary)}</p>${c.deep?`<details class=deep-analysis ${explanationOpen?'open':''}><summary>深入讲解 · 执行过程、数据与设计</summary>${c.sections.map(section=>`<section><h3>${esc(section.title)}</h3><p>${esc(section.body)}</p></section>`).join('')}<nav class=deep-evidence>${c.files.filter(item=>item.analyzed).map(item=>`<button data-deep-diff="${esc(item.file)}">查看 diff · ${esc(item.file.split('/').pop())}</button>`).join('')}</nav></details>`:''}${c.body?`<details><summary>提交原文</summary><p>${esc(c.body)}</p></details>`:''}</section><div class="history-layout"><nav class="commit-files">${c.files.map(item=>`<button class="history-item ${item.file===selectedFile?'active':''}" data-diff-file="${esc(item.file)}"><b>${esc(item.file)}</b><small>+${esc(item.add)} −${esc(item.del)}${item.analyzed?' · 已讲解':''}</small></button>`).join('')}${c.totalFiles>c.files.length?'<p>文件清单已截断。</p>':''}</nav><section class="file-diff">${f?`<div class="diff-toolbar"><strong>${esc(f.file)}</strong><button data-diff-view="unified" aria-pressed="${view==='unified'}">统一</button><button data-diff-view="split" aria-pressed="${view==='split'}">左右</button><button data-history-source="${esc(f.file)}" title="查看当前快照源码">↗</button></div><p class="diff-summary">${esc(f.summary)}${f.truncated?' 差异已截断。':''}</p><div class="diff-code">${diff(f.patch)}</div>`:'<p class="empty">没有已跟踪文件的改动。</p>'}</section></div>`;
+    $('history-content').dataset.view=contentView;
+    $('history-content').innerHTML=`<div class=commit-bar><strong title="${esc(c.analysisTitle||c.title)}">${esc(c.analysisTitle||c.title)}</strong><nav aria-label="提交视图"><button data-history-toggle aria-pressed="${contentView==='analysis'}" title="显示或隐藏右侧讲解" aria-label="显示或隐藏右侧讲解">▥</button></nav></div><section class="commit-summary"><div class="pane-title">改动讲解<button data-history-toggle title="收起讲解" aria-label="收起讲解">×</button></div>${f?`<section class="diff-current-note"><small>当前文件 · ${f.analyzed?'源码分析':'自动统计'}</small><h3>${esc(f.file)}</h3><p>${esc(f.summary)}</p></section>`:''}<small>${c.working?'工作区对比 HEAD':esc(c.id+' · '+c.author+' · '+c.date)} · ${c.analyzed?'源码分析':'未人工分析'}</small><h2>${esc(c.analysisTitle||c.title)}</h2><p>${esc(c.summary)}</p>${c.deep?`<details class=deep-analysis ${explanationOpen?'open':''}><summary>深入讲解 · 执行过程、数据与设计</summary>${c.sections.map(section=>`<section><h3>${esc(section.title)}</h3><p>${esc(section.body)}</p></section>`).join('')}<nav class=deep-evidence>${c.files.filter(item=>item.analyzed).map(item=>`<button data-deep-diff="${esc(item.file)}">查看 diff · ${esc(item.file.split('/').pop())}</button>`).join('')}</nav></details>`:''}${c.body?`<details><summary>提交原文</summary><p>${esc(c.body)}</p></details>`:''}</section><div class="history-layout"><nav class="commit-files">${c.files.map(item=>`<button class="history-item ${item.file===selectedFile?'active':''}" data-diff-file="${esc(item.file)}"><b>${esc(item.file)}</b><small>+${esc(item.add)} −${esc(item.del)}${item.analyzed?' · 已讲解':''}</small></button>`).join('')}${c.totalFiles>c.files.length?'<p>文件清单已截断。</p>':''}</nav><section class="file-diff">${f?`<div class="diff-toolbar"><strong>${esc(f.file)}</strong><button data-diff-view="unified" aria-pressed="${view==='unified'}">统一</button><button data-diff-view="split" aria-pressed="${view==='split'}">左右</button><button data-history-source="${esc(f.file)}" title="查看当前快照源码">↗</button></div>${f.truncated?'<small class=diff-truncation>差异已截断</small>':''}<div class="diff-code">${diff(f.patch)}</div>`:'<p class="empty">没有已跟踪文件的改动。</p>'}</section></div>`;
+    const layout=$('history-content').querySelector('.history-layout');
+    const divider=document.createElement('div');divider.className='diff-explain-resizer';divider.setAttribute('role','separator');divider.setAttribute('aria-label','调整讲解栏宽度');
+    layout.append(divider,$('history-content').querySelector('.commit-summary'));
+    divider.onpointerdown=event=>{
+      event.preventDefault();const start=event.clientX,width=layout.querySelector('.commit-summary').getBoundingClientRect().width;
+      divider.setPointerCapture(event.pointerId);
+      divider.onpointermove=move=>$('history-content').style.setProperty('--diff-notes',Math.max(260,Math.min(520,width+start-move.clientX))+'px');
+      divider.onpointerup=divider.onpointercancel=()=>{divider.onpointermove=null;};
+    };
   }
   document.addEventListener('click',event=>{
     const tab=event.target.closest('[data-side-tab]');if(tab){document.body.classList.toggle('show-history',tab.dataset.sideTab==='git');document.querySelectorAll('[data-side-tab]').forEach(b=>b.classList.toggle('active',b===tab));refresh();return;}
     const filter=event.target.closest('[data-history-scope]');if(filter){scope=filter.dataset.historyScope;document.querySelectorAll('[data-history-scope]').forEach(b=>b.classList.toggle('active',b===filter));refresh();return;}
     const commit=event.target.closest('[data-commit]');if(commit){selectCommit(commit.dataset.commit);return;}
-    const evidence=event.target.closest('[data-deep-diff]');if(evidence){selectedFile=evidence.dataset.deepDiff;explanationOpen=false;render();return;}
+    const toggle=event.target.closest('[data-history-toggle]');if(toggle){contentView=contentView==='analysis'?'diff':'analysis';$('history-content').dataset.view=contentView;document.querySelector('.commit-bar [data-history-toggle]').setAttribute('aria-pressed',String(contentView==='analysis'));return;}
+    const evidence=event.target.closest('[data-deep-diff]');if(evidence){selectedFile=evidence.dataset.deepDiff;contentView='analysis';render();return;}
     const file=event.target.closest('[data-diff-file]');if(file){selectedFile=file.dataset.diffFile;render();return;}
     const mode=event.target.closest('[data-diff-view]');if(mode){view=mode.dataset.diffView;render();return;}
     const source=event.target.closest('[data-history-source]');if(source){$('history-dialog').close();openSource(source.dataset.historySource);return;}

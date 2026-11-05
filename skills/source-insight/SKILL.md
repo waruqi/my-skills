@@ -72,3 +72,5 @@ node <skill-directory>/scripts/build.mjs \
 普通代码使用中性前景色，关键词蓝色、注释绿色、字符串柔和紫红、数字紫色，日夜主题分别适配。词法着色与语义索引分离，不能因为支持着色就宣称能解析该语言的调用关系。离线语法包覆盖 Python、TS/JS、C/C++、Lua、Go、Rust、Java、Kotlin、Objective-C，以及 HTML/XML、JSON、Shell、CSS、Markdown、YAML、Swift；未知语言保留安全转义的原文。检查跨行字符串、模板插值、正则、CRLF、非 BMP 字符及 HTML 特殊文本，保持 UTF-16 偏移和引用定位不变。
 
 随站点复制 highlight.min.js 和 highlight.LICENSE；当前内置 highlight.js 10.7.3 的上述语法，BSD-3-Clause 授权。不得删掉许可证；更新语法包时重新验证源码文本与引用锚点。
+
+Git 提交窗口以 diff 为主体，讲解放在可收起、可调宽的右侧栏，默认显示当前文件说明，随后提供提交整体讲解；切换文件时同步说明。不得在上方默认展开长篇讲解挤占代码高度，也不通过整页切换挡住 diff。关闭后保留可见恢复入口，窄屏使用可关闭抽屉；隐藏恢复保留 diff 滚动位置。讲解中的证据按钮定位对应文件差异。若有经过核对的行级讲解，可绑定历史提交的旧/新行号插入对应 hunk，不能把文件级说明硬贴到某一行冒充行级分析。
