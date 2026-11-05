@@ -8,6 +8,8 @@
   }
   const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fileMap = new Map(D.files.map(f => [f.id, f])), symMap = new Map(D.symbols.map(s => [s.id, s]));
+  const explained = new Set((D.analysis.notes||[]).map(n=>n.symbolId).filter(Boolean));
+  const badge = id => explained.has(id)?'<span class="explained-badge" title="已有源码讲解">讲解</span>':'';
   const key = 'source-workbench:' + D.root;
   const saved = name => { try { return JSON.parse(localStorage.getItem(key + name) || 'null'); } catch { return null; } };
   const save = (name, value) => { try { localStorage.setItem(key + name, JSON.stringify(value)); } catch {} };
@@ -48,8 +50,8 @@
   function outline() {
     const q=$('symbol-filter').value.toLowerCase();
     const syms=(fileMap.get(current)?.symbols||[]).map(id=>symMap.get(id));
-    $('outline-count').textContent=syms.length;
-    $('outline').innerHTML=syms.filter(s=>s.qualified.toLowerCase().includes(q)).map(s=>`<button class="row ${s.id===symbol?.id?'active':''}" data-symbol="${esc(s.id)}" title="${esc(s.qualified)}"><span class="kind">${esc(s.kind.slice(0,2))}</span><span>${s.parent?'　':''}${esc(s.name)}</span><small>${s.line}</small></button>`).join('')||'<p class="empty">此语言暂未提供语义符号索引；仍可读源码和搜索文本。</p>';
+    $('outline-count').textContent=syms.length+' · '+syms.filter(s=>explained.has(s.id)).length+' 处讲解';
+    $('outline').innerHTML=syms.filter(s=>s.qualified.toLowerCase().includes(q)).map(s=>`<button class="row ${s.id===symbol?.id?'active':''}" data-symbol="${esc(s.id)}" title="${esc(s.qualified)}"><span class="kind">${esc(s.kind.slice(0,2))}</span><span>${s.parent?'　':''}${esc(s.name)}</span>${badge(s.id)}<small>${s.line}</small></button>`).join('')||'<p class="empty">此语言暂未提供语义符号索引；仍可读源码和搜索文本。</p>';
   }
   function renderTabs() {
     $('tabs').innerHTML=tabs.map(f=>`<span class="tab ${f===current?'active':''}" data-file="${esc(f)}" title="${esc(f)}">${esc(f.split('/').pop())}<button data-close-tab="${esc(f)}" title="关闭标签">×</button></span>`).join('');
@@ -84,8 +86,8 @@
           body+=`<span class="${classes}"${r?` data-ref="${esc(r.targets.join('|'))}" title="点击查看关系；双击或 Ctrl/⌘ 点击跳定义"`:''}>${esc(text.slice(a,b))}</span>`;
         }
         const f=foldable.get(line),marked=marks.some(m=>m.file===current&&m.line===line);
+        for(const n of noteLines.get(line)||[])html.push(`<section class="annotation" data-note-line="${line}"><div class="annotation-head"><small>源码讲解 · 非原始注释</small><button data-explain="${(D.analysis.notes||[]).indexOf(n)}" title="在右侧阅读参数、返回值与设计分析">详细讲解 ↗</button></div><p>${esc(n.summary||n.title)}</p>${n.commentTranslation?`<details class="comment-translation"><summary>原注释 · 中文解读</summary><p>${esc(n.commentTranslation)}</p></details>`:''}</section>`);
         html.push(`<div class="source-row ${line===selectedLine?'selected':''} ${symbol&&line>=symbol.line&&line<=symbol.end?'in-symbol':''}" data-line="${line}"><span class="gutter">${f?`<button data-fold="${esc(f.id)}" title="折叠或展开">${folded.has(f.id)?'▸':'▾'}</button>`:''}${marked?'★ ':''}<button data-select-line="${line}" style="width:auto" title="选择行">${line}</button></span><span class="source-text">${body||' '}${f&&folded.has(f.id)?' <span class="muted">… '+(f.end-f.line)+' 行已折叠</span>':''}</span></div>`);
-        for(const n of noteLines.get(line)||[])html.push(`<div class="annotation"><small>源码讲解 · 非原始注释</small><strong> ${esc(n.title)}</strong><p>${esc(n.body)}</p></div>`);
         if(f&&folded.has(f.id))skipUntil=f.end;
       }
       offset=end+1;
@@ -115,7 +117,9 @@
     if(panel==='explain'){
       const notes=notesFor(s);let text=notes.map(noteHTML).join('');
       if(!text)text=`<p class="empty">${s?'此符号暂无人工深入讲解。下面的注释来自源码，不代表已经分析。':'选择一个已讲解的关键函数，或者从调用链开始。'}</p>`;
-      if(s?.doc)text+=`<article class="note"><small>源码文档注释</small><p>${esc(s.doc)}</p></article>`;
+      const translated=notes.filter(n=>n.commentTranslation);
+      for(const n of translated)text+=`<article class="note comment-explanation"><h3>原注释 · 中文解读</h3><p>${esc(n.commentTranslation)}</p><details><summary>对照原注释</summary><pre class="sample">${esc(n.commentOriginal||s?.doc||'此注释保留在函数上方的源码中。')}</pre></details></article>`;
+      if(s?.doc&&!translated.length)text+=`<article class="note"><small>源码文档注释 · 尚未提供中文解读</small><p>${esc(s.doc)}</p></article>`;
       if(chain){text+=`<article class="note"><h3>${esc(chain.title)}</h3><p>${esc(chain.summary)}</p>${chain.steps.map((step,i)=>`<button class="chain-step ${step.symbolId===s?.id?'active':''}" data-chain-step="${i}"><b>${i+1}. ${esc(step.title||step.symbol)}</b><small>${esc(step.relation||'经源码核对的阅读路径')}</small><p>${esc(step.text)}</p></button>`).join('')}</article>`;}
       else text+=`<article class="note"><h3>从关键调用链开始</h3>${(D.analysis.chains||[]).map((c,i)=>`<button class="relation" data-chain="${i}">${esc(c.title)}<small>${esc(c.summary)}</small></button>`).join('')}</article>`;
       $('inspector').innerHTML=text;return;
@@ -154,7 +158,7 @@
     const unique=new Map(edges.map(e=>[e.from+'>'+e.to,e]));edges=[...unique.values()];
     const counts=new Map();for(const n of nodes.values()){const row=counts.get(n.col)||0;counts.set(n.col,row+1);n.x=30+n.col*240;n.y=35+row*86;}
     const width=(Math.max(...[...nodes.values()].map(n=>n.col))+1)*240+30,height=Math.max(160,Math.max(...counts.values())*86+45);
-    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${Math.max(100,width/8)*zoom}%;min-height:${Math.min(height,450)*zoom}px" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?190:0),ex=b.x+(right?0:190);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),name=s?.qualified||n.id.split('/').pop(),sub=s?`${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(n.id)}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="190" height="58" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>25?name.slice(0,23)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
+    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${Math.max(100,width/8)*zoom}%;min-height:${Math.min(height,450)*zoom}px" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?190:0),ex=b.x+(right?0:190);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),name=s?.qualified||n.id.split('/').pop(),sub=s?`${explained.has(s.id)?'已讲解 · ':''}${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(n.id)}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="190" height="58" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>25?name.slice(0,23)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
     $('graph-title').textContent=graphMode==='imports'?'文件依赖':graphMode==='types'?'extends / implements':'调用者 → 当前 → 调用目标';
     $('graph-caption').textContent=`${nodes.size} 个节点${nodes.size>=45?' · 达到 45 个节点上限':''}。${graphMode==='both'?'实线：静态绑定；虚线：接口或声明。未解析调用见右侧。':'箭头指向依赖或基类型，不代表运行顺序。'}`;
   }
@@ -164,7 +168,7 @@
     const version=++searchVersion,q=$('search-input').value.toLowerCase().trim();
     const result=(title,sub,attrs,excerpt='')=>`<button class="result" ${attrs}><b>${esc(title)}</b><small>${esc(sub)}</small>${excerpt?`<pre>${esc(excerpt)}</pre>`:''}</button>`;
     if(searchMode==='files') {const found=D.files.filter(f=>f.readable&&f.id.toLowerCase().includes(q));showResults(found.slice(0,250).map(f=>result(f.id.split('/').pop(),f.id,`data-file="${esc(f.id)}"`)),`${found.length} 个文件 · 显示前 250 个`);}
-    else if(searchMode==='symbols'){const found=D.symbols.filter(s=>(s.qualified+' '+s.file).toLowerCase().includes(q));showResults(found.slice(0,250).map(s=>result(s.qualified,s.kind+' · '+s.file+':'+s.line,`data-symbol="${esc(s.id)}"`)),`${found.length} 个符号 · 显示前 250 个`);}
+    else if(searchMode==='symbols'||searchMode==='explained'){const found=D.symbols.filter(s=>(searchMode!=='explained'||explained.has(s.id))&&(s.qualified+' '+s.file).toLowerCase().includes(q));showResults(found.slice(0,250).map(s=>result(s.qualified+(explained.has(s.id)?' · 已讲解':''),s.kind+' · '+s.file+':'+s.line,`data-symbol="${esc(s.id)}"`)),`${found.length} 个符号 · 显示前 250 个`);}
     else if(searchMode==='chains'){showResults((D.analysis.chains||[]).map((c,i)=>({c,i})).filter(({c})=>(c.title+c.summary).toLowerCase().includes(q)).map(({c,i})=>result(c.title,c.summary,`data-chain="${i}"`)),'人工分析的阅读路径；步骤可以包含已明确标注的动态边界。');}
     else if(searchMode==='bookmarks'){showResults(marks.filter(m=>m.file.toLowerCase().includes(q)).map(m=>result(m.file.split('/').pop()+':'+m.line,m.file,`data-file="${esc(m.file)}" data-line="${m.line}"`)),'书签仅保存在当前浏览器。');}
     else if(!runText||!q){showResults([],'输入文本后按 Enter；读取离线源码快照，不访问网络。');}
@@ -188,6 +192,14 @@
     $('info-dialog').showModal();
   }
   document.addEventListener('click',async event=>{
+    const explanation=event.target.closest('[data-explain]');
+    if(explanation){
+      const n=D.analysis.notes[Number(explanation.dataset.explain)];
+      panel='explain';document.body.classList.remove('hidden-right');
+      if(matchMedia('(max-width:720px)').matches)document.body.classList.add('mobile-right');
+      if(n.symbolId)choose(n.symbolId);else{symbol=undefined;selectedLine=n.line;inspect();}
+      $('inspector').scrollTop=0;status('已在右侧打开详细讲解：'+n.title);return;
+    }
     const close=event.target.closest('[data-close-tab]');if(close){event.stopPropagation();tabs=tabs.filter(f=>f!==close.dataset.closeTab);renderTabs();if(current===close.dataset.closeTab&&tabs.length)go(tabs.at(-1));return;}
     const step=event.target.closest('[data-chain-step]');if(step&&chain){const s=chain.steps[Number(step.dataset.chainStep)];go(s.file,s.line,s.symbolId);return;}
     const c=event.target.closest('[data-chain]');if(c){chain=D.analysis.chains[Number(c.dataset.chain)];panel='explain';$('search-dialog').close();const s=chain.steps[0];go(s.file,s.line,s.symbolId);return;}
