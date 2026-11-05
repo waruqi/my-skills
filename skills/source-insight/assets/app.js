@@ -8,6 +8,8 @@
   }
   const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fileMap = new Map(D.files.map(f => [f.id, f])), symMap = new Map(D.symbols.map(s => [s.id, s]));
+  const manualKey=a=>'manual:'+a.file+':'+a.line;
+  const manualNodes=new Map((D.analysis.manualCalls||[]).flatMap(c=>[c.from,c.to]).map(a=>[manualKey(a),a]));
   const explained = new Set((D.analysis.notes||[]).map(n=>n.symbolId).filter(Boolean));
   const badge = id => explained.has(id)?'<span class="explained-badge" title="已有源码讲解">讲解</span>':'';
   const key = 'source-workbench:' + D.root;
@@ -16,7 +18,8 @@
   let current, symbol, selectedLine = 1, panel = 'explain', graphMode = 'both', depth = 1, zoom = 1, generation = 0;
   let tabs = (saved(':tabs') || []).filter(f => fileMap.get(f)?.readable), marks = (saved(':marks') || []).filter(m => fileMap.has(m.file));
   let searchMode = 'files', searchVersion = 0, chain, folded = new Set(), matches = [], matchCursor = -1;
-  let graphKey='', nodeLimit=13, docMode='summary';
+  let historyRefresh;
+  let graphKey='', nodeLimit=13, docMode='summary', nativeGraph=false;
   const outgoing = new Map(), incoming = new Map(), references = new Map();
   for (const call of D.calls) {
     if (!outgoing.has(call.from)) outgoing.set(call.from, []); outgoing.get(call.from).push(call);
@@ -141,7 +144,7 @@
     const token=++generation;status('读取 '+file);
     try{await load(file);}catch(e){status(e.message);return;}if(token!==generation)return;
     if(current!==file){docMode='summary';folded.clear();$('find-input').value='';}
-    current=file;selectedLine=Math.max(1,Math.min(Number(line)||1,f.lines));
+    current=file;historyRefresh?.();selectedLine=Math.max(1,Math.min(Number(line)||1,f.lines));
     if(selectedLine>1&&/\.(md|mdx|rst|txt)$/i.test(file))docMode='source';
     symbol=id?symMap.get(id):D.symbols.filter(s=>s.file===file&&s.line<=selectedLine&&s.end>=selectedLine).sort((a,b)=>(a.end-a.line)-(b.end-b.line))[0];
     for(const id of [...folded]){const s=symMap.get(id);if(selectedLine>s.line&&selectedLine<=s.end)folded.delete(id);}
@@ -180,17 +183,38 @@
       return `<div class="relation"><button data-file="${esc(r.file)}" data-line="${r.line}" title="跳到使用位置">${esc(r.expression||other?.qualified||'引用')} <small>${esc(r.file)}:${r.line}</small></button>${r.certainty?`<span class="tag">${certainty(r)}${r.deferred?' · 回调中':''}</span>`:''}${other?`<button data-symbol="${esc(other.id)}" title="跳到关联定义">${esc(other.qualified)} ↗</button>`:''}</div>`;
     }).join('')+(items.length>600?'<p>列表截取前 600 处；索引保留完整数据。</p>':'');
   }
+  function graphView() {
+    const full=$('graph-pane').classList.contains('expanded');
+    const button=document.querySelector('[data-action=graph-fullscreen]');
+    button.title=full?'退出调用图全屏（Esc）':'全屏调用图';button.setAttribute('aria-label',button.title);
+    button.setAttribute('aria-pressed',String(full));button.textContent=full?'⊡':'⛶';
+    const toggle=document.querySelector('[data-action=graph]');
+    const hidden=document.body.classList.contains('hidden-graph');
+    toggle.title=hidden?'显示调用图':'隐藏调用图';toggle.setAttribute('aria-label',toggle.title);toggle.setAttribute('aria-expanded',String(!hidden));
+  }
+  async function exitGraph() {
+    if(document.fullscreenElement===$('graph-pane'))await document.exitFullscreen();
+    nativeGraph=false;$('graph-pane').classList.remove('expanded');graphView();
+  }
+  document.addEventListener('fullscreenchange',()=>{
+    if(nativeGraph&&document.fullscreenElement!==$('graph-pane')){nativeGraph=false;$('graph-pane').classList.remove('expanded');graphView();}
+  });
   function graph(){
     let center=symbol?.id,nodes=new Map(),edges=[];
+    const manual=!center&&graphMode==='both'&&manualNodes.has(manualKey({file:current,line:selectedLine}));
+    if(manual)center=manualKey({file:current,line:selectedLine});
     const nextKey=(graphMode==='imports'?current:center)+':'+graphMode+':'+depth;
     if(nextKey!==graphKey){graphKey=nextKey;nodeLimit=13;$('graph').scrollTop=0;$('graph').scrollLeft=0;}
     const omitted=new Set();
     const add=(id,col,limit=nodeLimit)=>{if(nodes.has(id))return true;if(nodes.size>=limit){omitted.add(id);return false;}nodes.set(id,{id,col});omitted.delete(id);return true;};
-    if(graphMode==='imports'){
+    if(manual){
+      add(center,1);
+      for(const c of D.analysis.manualCalls){const from=manualKey(c.from),to=manualKey(c.to);if(from===center||to===center){add(from,from===center?1:0);add(to,to===center?1:2);edges.push({from,to,kind:`人工核对 · ${c.file}:${c.line} · ${c.note||'直接调用'}`});}}
+    }else if(graphMode==='imports'){
       center=current;if(!center)return;add(center,1);
       for(const e of D.imports){if(e.from===center&&e.to){add(e.to,2);edges.push({from:center,to:e.to});}else if(e.to===center){add(e.from,0);edges.push({from:e.from,to:center});}}
     }else{
-      if(!center){$('graph').innerHTML='<p class="empty">选中函数后显示调用图，选中类或接口可查看类型关系。</p>';return;}
+      if(!center){$('graph-caption').textContent='';$('graph').innerHTML='<p class="empty">选中函数后显示调用图，选中类或接口可查看类型关系。</p>';return;}
       add(center,depth);
       if(graphMode==='types'){
         for(const e of D.inheritance){if(e.from===center||e.to===center){add(e.from,e.from===center?depth:depth-1);add(e.to,e.to===center?depth:depth+1);edges.push(e);}}
@@ -210,9 +234,9 @@
     const unique=new Map(edges.map(e=>[e.from+'>'+e.to,e]));edges=[...unique.values()];
     const counts=new Map();for(const n of nodes.values()){const row=counts.get(n.col)||0;counts.set(n.col,row+1);n.x=20+n.col*280;n.y=22+row*88;}
     const width=(Math.max(...[...nodes.values()].map(n=>n.col))+1)*280+20,height=Math.max(160,Math.max(...counts.values())*86+45);
-    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${width*zoom}px;height:${height*zoom}px;min-width:0" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?240:0),ex=b.x+(right?0:240);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),name=s?.qualified||n.id.split('/').pop(),sub=s?`${explained.has(s.id)?'已讲解 · ':''}${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(n.id)}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="240" height="64" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>28?name.slice(0,26)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
-    $('graph-title').textContent=graphMode==='imports'?'文件依赖':graphMode==='types'?'extends / implements':'调用者 → 当前 → 调用目标';
-    $('graph-caption').innerHTML=`<span>${nodes.size} 个节点 · ${Math.round(zoom*100)}% · 滚动查看，不自动缩小${omitted.size?` · 当前展开范围另有 ${omitted.size} 个节点未显示`:''}。${graphMode==='both'?'完整调用位置见右侧；虚线表示接口或声明。':'箭头指向依赖或基类型。'}</span>${omitted.size&&nodeLimit<61?'<button data-action="graph-more">展开更多</button>':''}<button data-action="zoom-reset" title="恢复清晰字号">100%</button>`;
+    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${width*zoom}px;height:${height*zoom}px;min-width:0" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?240:0),ex=b.x+(right?0:240);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),m=manualNodes.get(n.id),name=s?.qualified||m?.name||n.id.split('/').pop(),sub=m?`人工核对 · L${m.line}`:s?`${explained.has(s.id)?'已讲解 · ':''}${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(m?.file||n.id)}" data-line="${m?.line||1}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="240" height="64" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>28?name.slice(0,26)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
+    $('graph-title').textContent=manual?'人工核对的直接调用':graphMode==='imports'?'文件依赖':graphMode==='types'?'extends / implements':'调用者 → 当前 → 调用目标';
+    $('graph-caption').innerHTML=`<span>${nodes.size} 个节点 · ${Math.round(zoom*100)}% · 滚动查看，不自动缩小${omitted.size?` · 当前展开范围另有 ${omitted.size} 个节点未显示`:''}。${manual?'人工核对的一层调用，不代表完整语义索引；连线提示含调用位置。':graphMode==='both'?'完整调用位置见右侧；虚线表示接口或声明。':'箭头指向依赖或基类型。'}</span>${omitted.size&&nodeLimit<61?'<button data-action="graph-more">展开更多</button>':''}<button data-action="zoom-reset" title="恢复清晰字号">100%</button>`;
   }
   function search(mode=searchMode){searchMode=mode;$('search-dialog').showModal();document.querySelectorAll('[data-search]').forEach(b=>b.classList.toggle('active',b.dataset.search===mode));$('search-input').value='';$('search-input').focus();results();}
   function showResults(items,label){$('search-status').textContent=label;$('results').innerHTML=items.join('')||'<p class="empty">没有结果。</p>';}
@@ -246,6 +270,7 @@
     $('info-dialog').showModal();
   }
   document.addEventListener('click',async event=>{
+    if(event.target.closest('.graph-node')&&$('graph-pane').classList.contains('expanded'))await exitGraph();
     const docTab=event.target.closest('[data-doc]');if(docTab){docMode=docTab.dataset.doc;code();$('code').scrollTop=0;return;}
     const explanation=event.target.closest('[data-explain]');
     if(explanation){
@@ -267,6 +292,14 @@
     const g=event.target.closest('[data-graph]');if(g){graphMode=g.dataset.graph;document.querySelectorAll('[data-graph]').forEach(el=>el.classList.toggle('active',el===g));graph();return;}
     const mode=event.target.closest('[data-search]');if(mode){searchMode=mode.dataset.search;document.querySelectorAll('[data-search]').forEach(el=>el.classList.toggle('active',el===mode));results();return;}
     const a=event.target.closest('[data-action]')?.dataset.action;if(!a)return;
+    if(a==='graph-fullscreen'){
+      if($('graph-pane').classList.contains('expanded'))await exitGraph();
+      else{document.body.classList.remove('hidden-graph');$('graph-pane').classList.add('expanded');graphView();try{nativeGraph=true;await $('graph-pane').requestFullscreen();}catch{nativeGraph=false;} }
+      return;
+    }
+    if(a==='graph-hide'){await exitGraph();document.body.classList.add('hidden-graph');graphView();return;}
+    if(a==='hide-left'){document.body.classList.remove('mobile-left');if(!matchMedia('(max-width:720px)').matches)document.body.classList.add('hidden-left');return;}
+    if(a==='hide-right'){document.body.classList.remove('mobile-right');if(!matchMedia('(max-width:720px)').matches)document.body.classList.add('hidden-right');return;}
     if(a==='entry'){const s=D.analysis.start;if(s){panel='explain';chain=undefined;go(s.file,s.line,s.symbolId);}return;}
     if(a==='file-intro'){$('code').scrollTop=0;return;}
     if(a==='graph-more'){nodeLimit=Math.min(61,nodeLimit+12);graph();return;}
@@ -275,7 +308,7 @@
     else if(a==='search-close'){$('search-dialog').close();searchVersion++;}else if(a==='info-close')$('info-dialog').close();else if(a==='help')help();
     else if(a==='sidebar')document.body.classList.toggle(matchMedia('(max-width:720px)').matches?'mobile-left':'hidden-left');
     else if(a==='inspector')document.body.classList.toggle(matchMedia('(max-width:720px)').matches?'mobile-right':'hidden-right');
-    else if(a==='graph')document.body.classList.toggle('hidden-graph');
+    else if(a==='graph'){document.body.classList.toggle('hidden-graph');graphView();}
     else if(a==='theme'){const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('source-theme',theme);}catch{}}
     else if(a==='fullscreen'){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch(e){status('浏览器未允许全屏：'+e.message);}}
     else if(a==='wrap')$('code').classList.toggle('wrap');
@@ -296,6 +329,11 @@
   $('search-dialog').addEventListener('close',()=>searchVersion++);
   $('find-input').oninput=()=>{matchCursor=-1;find();};$('find-input').onkeydown=e=>{if(e.key==='Enter')find(e.shiftKey?-1:1);};
   document.addEventListener('keydown',e=>{
+    if($('graph-pane').classList.contains('expanded')){
+      if(e.key==='Escape'){e.preventDefault();exitGraph();return;}
+      if(['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','PageDown','PageUp'].includes(e.key)){e.preventDefault();const horizontal=['ArrowLeft','ArrowRight'].includes(e.key),amount=(['ArrowUp','ArrowLeft','PageUp'].includes(e.key)?-1:1)*(e.key.startsWith('Page')?$('graph').clientHeight*.8:69);$('graph').scrollBy(horizontal?amount:0,horizontal?0:amount);return;}
+      if(e.key!=='Enter'&&e.key!=='Tab'){e.preventDefault();return;}
+    }
     if(e.target.closest('input,textarea,dialog'))return;
     const mod=e.ctrlKey||e.metaKey;
     if(mod&&['p','t','f','l'].includes(e.key.toLowerCase())){e.preventDefault();const k=e.key.toLowerCase();if(k==='p')search('files');if(k==='t')search('symbols');if(k==='f'){if(e.shiftKey)search('text');else document.querySelector('[data-action=find]').click();}if(k==='l')document.querySelector('[data-action=line]').click();}
@@ -307,6 +345,7 @@
     $(id).onpointerdown=e=>{e.preventDefault();const start=e[axis],size=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(variable));$(id).setPointerCapture(e.pointerId);$(id).onpointermove=m=>document.documentElement.style.setProperty(variable,Math.max(min,Math.min(max,size+(m[axis]-start)*sign))+'px');$(id).onpointerup=()=>{$(id).onpointermove=null;};};
   }
   function hash(){const p=new URLSearchParams(location.hash.slice(1));if(p.has('file'))open(p.get('file'),Number(p.get('line'))||1,p.get('symbol'));}
-  window.addEventListener('hashchange',hash);fileTree();
+  historyRefresh=window.initSourceHistory({data:D,currentFile:()=>current,openSource:go});
+  window.addEventListener('hashchange',hash);fileTree();graphView();
   if(location.hash.startsWith('#file='))hash();else{const first=D.analysis.start||saved(':last')||{file:D.files.find(f=>f.readable&&f.language==='typescript')?.id||D.files.find(f=>f.readable)?.id,line:1};if(first.file)go(first.file,first.line,first.symbolId||first.id);}
 })();

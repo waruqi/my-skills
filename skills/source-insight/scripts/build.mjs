@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { pack } from './pack.mjs';
+import { writeHistory } from './history.mjs';
 
 const args = process.argv.slice(2);
 const value = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
@@ -180,6 +181,10 @@ for (const chain of analysis.chains || []) {
   for (const step of chain.steps) resolveAnchor(step);
 }
 if (analysis.start) resolveAnchor(analysis.start);
+for (const call of analysis.manualCalls || []) {
+  resolveAnchor(call.from); resolveAnchor(call.to); resolveAnchor(call);
+  if (!call.from.name || !call.to.name) throw new Error('人工调用关系需要真实声明名称');
+}
 for (const note of analysis.fileNotes || []) {
   if (!textByFile.has(note.file) || !note.summary) throw new Error('文件讲解需要已收录文件和职责摘要');
 }
@@ -209,6 +214,7 @@ for (const file of files) {
   fs.writeFileSync(path.join(out, file.chunk), `window.SOURCE_FILES[${encode(file.id)}]=${encode({ text, refs: perFile.get(file.id) || [], tokens })};\n`);
 }
 const manifest = { version: 1, title: analysis.title || path.basename(root), root, revision, dirty: !!worktree, generated: new Date().toISOString(), compiler: ts.version, config: fs.existsSync(configPath) ? toRel(configPath) : null, files, symbols, refs, calls, inheritance, imports, analysis, diagnostics, coverage: { indexedFiles: sources.length, readableFiles: textByFile.size, skippedFiles: files.filter(f => !f.readable).length, unresolvedCalls: calls.filter(c => c.certainty === 'unresolved').length, limitations: ['JS/TS 使用编译器静态符号绑定；不是运行时完整调用轨迹。','接口、回调和动态分派不推断所有具体实现；未解析调用单独展示。','其他语言仅支持源码、文本搜索和人工行级讲解，不宣称语义引用。','只收录 Git 跟踪的当前文件；排除依赖、产物、常见凭证路径和超大文件。','使用指定根配置组织所有 JS/TS 文件；异构子项目配置可能影响解析。'] } };
+manifest.history=writeHistory(root,out,analysis.gitNotes||[]);
 fs.writeFileSync(path.join(out, 'index.json'), JSON.stringify(manifest));
 pack(manifest, out);
 console.log(`离线源码工作台：${pathToFileURL(path.join(out, 'index.html')).href}`);
