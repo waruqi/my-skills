@@ -1,0 +1,4 @@
+interface:
+  display_name: "源码分析工作台"
+  short_description: "生成离线源码工作台，沿文件、符号、引用和调用图阅读代码与关键实现讲解"
+  default_prompt: "使用 $source-insight 分析当前项目，生成带符号导航、引用调用图和关键函数讲解的离线源码工作台。"

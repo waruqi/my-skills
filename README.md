@@ -6,7 +6,19 @@
 
 | Skill | 功能 | 适用场景 |
 | --- | --- | --- |
+| [source-insight](skills/source-insight/SKILL.md) | 生成类似 Source Insight 的离线源码工作台，提供文件/符号搜索、定义与引用、调用和类型关系、关键函数与调用链讲解 | 深入阅读源码、追踪调用、理解状态与维护代码 |
 | [project-understanding](skills/project-understanding/SKILL.md) | 分析项目架构、模块职责与设计取舍，生成带交互图解、运行流程、数据样本和源码导航的离线网站 | 接手项目、阅读源码、架构梳理、团队入门 |
+
+### source-insight
+
+直接进入源码工作台，不按 PPT 编排。文件树、当前文件符号、代码和关系面板共同导航，调用图与真实文件位置联动。
+
+- **源码阅读**：多标签、前后跳转、行号定位、函数折叠、语法着色、文件内查找、书签、复制原始代码、本地编辑器定位、全屏和夜间模式；可隐藏和调整各面板。
+- **导航与关系**：全局文件、符号和全文搜索；JS/TS 编译器静态定义与引用、调用者与调用目标、类与接口继承、文件导入关系；区分实际使用位置和声明位置。
+- **深入讲解**：关键行下方及右侧展示函数行为、输入输出、错误与取消、状态变化和设计原因；调用链串联具体任务，不把回调或协议边界冒充直接函数调用。
+- **分析范围**：内置 JS/TS 语义索引，其他语言提供文本阅读与搜索；接口、动态调用和未知目标明确标记。只读快照，不宣称具备完整运行时调用分析、调试或重构。
+
+默认生成 `source-guide/dist/index.html`，直接用浏览器离线打开。需要 Node.js、Git，以及提供 `createProgram` API 的 TypeScript 编译器。可通过 `--compiler` 指向本机已有兼容版本，不必修改目标项目依赖。分析内容由 Agent 阅读源码后编写，自动索引不等于每个函数已有人工讲解。
 
 ### project-understanding
 
@@ -34,11 +46,12 @@ git clone https://github.com/waruqi/my-skills.git
 cd my-skills
 ```
 
-安装所需 skill：
+安装所需 skill（将 `skill_name` 设为 `source-insight` 或 `project-understanding`）：
 
 ```sh
-skill_source="$PWD/skills/project-understanding"
-skill_target="${CODEX_HOME:-$HOME/.codex}/skills/project-understanding"
+skill_name="source-insight"
+skill_source="$PWD/skills/$skill_name"
+skill_target="${CODEX_HOME:-$HOME/.codex}/skills/$skill_name"
 mkdir -p "$(dirname "$skill_target")"
 if [ -e "$skill_target" ] || [ -L "$skill_target" ]; then
   printf '已存在，未覆盖：%s\n' "$skill_target"
@@ -51,11 +64,18 @@ fi
 
 ### 不安装，直接使用
 
-在目标项目中让 Agent 读取克隆目录下的 `skills/project-understanding/SKILL.md`，按其中的流程执行即可。
+在目标项目中让 Agent 读取克隆目录下所需的 `skills/<skill-name>/SKILL.md`，按其中的流程执行即可。
 
 ## 用法
 
-在要分析的项目中调用：
+在要分析的项目中调用源码工作台：
+
+```text
+$source-insight 分析当前项目，生成中文源码工作台。
+提供文件与符号导航、引用和调用图，重点解释关键调用链、参数、返回值与错误处理。
+```
+
+生成架构学习网站：
 
 ```text
 $project-understanding 分析当前项目，生成中文架构学习网站。
@@ -69,7 +89,7 @@ $project-understanding 重点解释一次请求从入口到存储的完整过程
 展示每一步的数据格式、错误处理和对应源码。
 ```
 
-构建网站需要 Python 3.9+ 和 Git；运行样本需要目标项目自身的依赖。项目分析由 Agent 完成，构建脚本负责校验与打包。
+构建架构学习网站需要 Python 3.9+ 和 Git；运行样本需要目标项目自身的依赖。项目分析由 Agent 完成，构建脚本负责校验与打包。
 
 ### 更新已有网站
 
@@ -91,4 +111,28 @@ skills/project-understanding/
 ├── references/          # 内容格式与图形协议
 ├── scripts/build.py     # 网站构建器
 └── assets/              # 网页模板与交互图形渲染器
+```
+
+### 更新源码工作台
+
+让 Agent 先核对变化并更新 `source-guide/analysis.json`，再重新生成静态索引和页面：
+
+```sh
+node /path/to/source-insight/scripts/build.mjs \
+  --root . \
+  --analysis source-guide/analysis.json \
+  --out source-guide/dist
+```
+
+若项目安装的 TypeScript 没有所需编译器 API，附加 `--compiler /path/to/typescript/lib/typescript.js` 指向已安装的兼容版本。不要为分析而降级产品依赖。`--config` 可指定项目内配置文件；多配置项目需要核对覆盖范围。
+
+```text
+skills/source-insight/
+├── SKILL.md                      # 分析方法与使用边界
+├── agents/openai.yaml            # 技能信息
+├── references/analysis-format.md # 函数与调用链讲解格式
+├── scripts/build.mjs             # 编译器索引与网站构建
+├── scripts/pack.mjs              # 关系数据压缩与界面打包
+├── scripts/build.test.mjs        # 语义绑定和边界验证
+└── assets/                       # 离线源码工作台
 ```
