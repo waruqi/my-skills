@@ -16,6 +16,7 @@
   let current, symbol, selectedLine = 1, panel = 'explain', graphMode = 'both', depth = 1, zoom = 1, generation = 0;
   let tabs = (saved(':tabs') || []).filter(f => fileMap.get(f)?.readable), marks = (saved(':marks') || []).filter(m => fileMap.has(m.file));
   let searchMode = 'files', searchVersion = 0, chain, folded = new Set(), matches = [], matchCursor = -1;
+  let graphKey='', nodeLimit=13, docMode='summary';
   const outgoing = new Map(), incoming = new Map(), references = new Map();
   for (const call of D.calls) {
     if (!outgoing.has(call.from)) outgoing.set(call.from, []); outgoing.get(call.from).push(call);
@@ -50,6 +51,8 @@
   function outline() {
     const q=$('symbol-filter').value.toLowerCase();
     const syms=(fileMap.get(current)?.symbols||[]).map(id=>symMap.get(id));
+    const anchors=(D.analysis.notes||[]).filter(n=>n.file===current&&!n.symbolId);
+    if(!syms.length&&anchors.length){$('outline-count').textContent=anchors.length+' 处人工锚点';$('outline').innerHTML=anchors.filter(n=>(n.title+n.summary).toLowerCase().includes(q)).map(n=>`<button class="row" data-file="${esc(n.file)}" data-line="${n.line}"><span>${esc(n.title)}</span><small>${n.line}</small></button>`).join('');return;}
     $('outline-count').textContent=syms.length+' · '+syms.filter(s=>explained.has(s.id)).length+' 处讲解';
     $('outline').innerHTML=syms.filter(s=>s.qualified.toLowerCase().includes(q)).map(s=>`<button class="row ${s.id===symbol?.id?'active':''}" data-symbol="${esc(s.id)}" title="${esc(s.qualified)}"><span class="kind">${esc(s.kind.slice(0,2))}</span><span>${s.parent?'　':''}${esc(s.name)}</span>${badge(s.id)}<small>${s.line}</small></button>`).join('')||'<p class="empty">此语言暂未提供语义符号索引；仍可读源码和搜索文本。</p>';
   }
@@ -57,9 +60,44 @@
     $('tabs').innerHTML=tabs.map(f=>`<span class="tab ${f===current?'active':''}" data-file="${esc(f)}" title="${esc(f)}">${esc(f.split('/').pop())}<button data-close-tab="${esc(f)}" title="关闭标签">×</button></span>`).join('');
     save(':tabs',tabs);
   }
-  function notesFor(s) { return (D.analysis.notes||[]).filter(n=>n.file===(s?.file||current)&&(n.symbolId?s?.id===n.symbolId:!s||n.line>=s.line&&n.line<=s.end)); }
+  function notesFor(s) { return (D.analysis.notes||[]).filter(n=>n.file===(s?.file||current)&&(n.symbolId?s?.id===n.symbolId:s?n.line>=s.line&&n.line<=s.end:selectedLine===1||n.line===selectedLine)); }
   function noteHTML(n) { return `<article class="note"><small>${esc(n.evidence||'源码阅读分析')} · ${n.line}–${n.end||n.line}</small><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p>${n.input!==undefined?`<b>输入</b><pre>${esc(typeof n.input==='string'?n.input:JSON.stringify(n.input,null,2))}</pre>`:''}${n.output!==undefined?`<b>输出 / 返回</b><pre>${esc(typeof n.output==='string'?n.output:JSON.stringify(n.output,null,2))}</pre>`:''}${n.design?`<b>设计原因与代价</b><p>${esc(n.design)}</p>`:''}${n.failure?`<b>错误、取消与边界</b><p>${esc(n.failure)}</p>`:''}</article>`; }
+  // Markdown 仅解析安全的文本、标题、链接和代码块，不插入原始 HTML。
+  function markdown(text) {
+    const inline = value => esc(value).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\[([^\]]+)\]\(([^ )]+)\)/g,(_,label,url)=>{
+      const decoded=url.replaceAll('&amp;','&');
+      if(/^https?:\/\//.test(decoded))return `<a href="${esc(decoded)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      if(/^[a-z]+:|^\/\//i.test(decoded))return label;
+      const parts=current.split('/');parts.pop();
+      for(const part of decoded.split('#')[0].split('/')){if(part==='..')parts.pop();else if(part&&part!=='.')parts.push(part);}
+      let file=parts.join('/');if(!fileMap.has(file)&&fileMap.has(file+'/README.md'))file+='/README.md';
+      return fileMap.has(file)?`<button class="doc-link" data-file="${esc(file)}">${label}</button>`:label;
+    });
+    const blocks=text.split(/(```[^\n]*\n[\s\S]*?```)/g);
+    return blocks.map(block=>{
+      if(block.startsWith('```'))return '<pre><code>'+esc(block.replace(/^```[^\n]*\n/,'').replace(/```$/,''))+'</code></pre>';
+      return block.split(/\n\s*\n/).filter(Boolean).map(paragraph=>{
+        const heading=paragraph.match(/^(#{1,6}) (.*)$/);
+        return heading?`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`:`<p>${inline(paragraph)}</p>`;
+      }).join('');
+    }).join('');
+  }
+  function documentView() {
+    const doc=(D.analysis.documents||[]).find(d=>d.file===current);
+    if(!/\.(md|mdx|rst|txt)$/i.test(current))return false;
+    const valid=doc&&doc.sourceHash===fileMap.get(current).hash;
+    const nav=`<nav class="doc-tabs"><button data-doc="summary" class="${docMode==='summary'?'active':''}">中文概要</button><button data-doc="translation" class="${docMode==='translation'?'active':''}">中文译文</button><button data-doc="original" class="${docMode==='original'?'active':''}">英文 / 原文</button><button data-doc="source" class="${docMode==='source'?'active':''}">原始文本</button></nav>`;
+    $('doc-tabs').innerHTML=nav;$('doc-tabs').hidden=false;
+    document.body.classList.add('reading-doc');
+    if(docMode==='source')return false;
+    const missing=doc?'原文已变化，旧译文暂不展示，请重新核对。':'这份文档尚未翻译。本次优先分析关键文档，可切换原文阅读。';
+    const content=docMode==='original'?window.SOURCE_FILES[current].text:valid?(docMode==='summary'?doc.summary:doc.translation):missing;
+    $('code').innerHTML=`<article class="document"><small>${valid?'已翻译关键文档 · 原文 SHA-256 '+doc.sourceHash.slice(0,10):'原文快照'} · ${esc(current)}</small>${docMode==='summary'?'<h1>先读懂这份文档</h1>':''}${markdown(content)}${docMode==='summary'&&valid?`<div class="doc-next">${(doc.related||[]).map(r=>`<button data-file="${esc(r.file)}" data-line="${r.line||1}">${esc(r.title)} ↗</button>`).join('')}</div>`:''}</article>`;
+    return true;
+  }
   function code() {
+    $('doc-tabs').hidden=true;document.body.classList.remove('reading-doc');
+    if(documentView())return;
     const data=window.SOURCE_FILES[current];if(!data)return;
     const lines=data.text.split('\n'), perLine=new Map();
     for(const r of data.refs){if(!perLine.has(r.line))perLine.set(r.line,[]);perLine.get(r.line).push(r);}
@@ -67,7 +105,11 @@
     for(const n of D.analysis.notes||[])if(n.file===current){if(!noteLines.has(n.line))noteLines.set(n.line,[]);noteLines.get(n.line).push(n);}
     const foldable=new Map();
     for(const id of fileMap.get(current).symbols||[]){const s=symMap.get(id);if(s.end>s.line+3)foldable.set(s.line,s);}
-    let offset=0,tokenIndex=0,skipUntil=0;const html=[];
+    const fileNote=(D.analysis.fileNotes||[]).find(n=>n.file===current);
+    const topSymbols=(fileMap.get(current).symbols||[]).map(id=>symMap.get(id)).filter(s=>!s.parent);
+    const firstSymbols=[...topSymbols].sort((a,b)=>Number(explained.has(b.id))-Number(explained.has(a.id))).slice(0,8);
+    const intro=`<section class="file-overview" id="file-overview"><small>${fileNote?'文件讲解':'自动结构摘要 · 尚未深入分析'}</small><h3>${esc(current.split('/').pop())}</h3><p>${esc(fileNote?.summary||(topSymbols.length?`当前文件有 ${topSymbols.length} 个顶层声明，下面列出部分可直接跳转的类、类型或函数。`:'此文件没有已索引的顶层声明，可以直接阅读下方内容。'))}</p>${fileNote?.body?`<p>${esc(fileNote.body)}</p>`:''}<div class="file-entry-links">${firstSymbols.map(s=>`<button data-symbol="${esc(s.id)}">${esc(s.name)}${badge(s.id)}</button>`).join('')}</div></section>`;
+    let offset=0,tokenIndex=0,skipUntil=0;const html=[intro];
     for(let i=0;i<lines.length;i++){
       const line=i+1,text=lines[i],end=offset+text.length;
       while(tokenIndex<data.tokens.length&&data.tokens[tokenIndex][1]<=offset)tokenIndex++;
@@ -98,13 +140,15 @@
     const f=fileMap.get(file);if(!f?.readable){status('该文件未收录为可读文本');return;}
     const token=++generation;status('读取 '+file);
     try{await load(file);}catch(e){status(e.message);return;}if(token!==generation)return;
-    if(current!==file){folded.clear();$('find-input').value='';}
+    if(current!==file){docMode='summary';folded.clear();$('find-input').value='';}
     current=file;selectedLine=Math.max(1,Math.min(Number(line)||1,f.lines));
+    if(selectedLine>1&&/\.(md|mdx|rst|txt)$/i.test(file))docMode='source';
     symbol=id?symMap.get(id):D.symbols.filter(s=>s.file===file&&s.line<=selectedLine&&s.end>=selectedLine).sort((a,b)=>(a.end-a.line)-(b.end-b.line))[0];
     for(const id of [...folded]){const s=symMap.get(id);if(selectedLine>s.line&&selectedLine<=s.end)folded.delete(id);}
     if(!tabs.includes(file))tabs.push(file);renderTabs();fileTree();outline();code();inspect();graph();
     $('breadcrumb').textContent=file+(symbol?' › '+symbol.qualified:'');
-    $('code').querySelector(`[data-line="${selectedLine}"]`)?.scrollIntoView({block:'center'});
+    if(selectedLine===1&&!id)$('code').scrollTop=0;
+    else $('code').querySelector(`[data-line="${selectedLine}"]`)?.scrollIntoView({block:'center'});
     status(`${file}:${selectedLine} · ${symbol?.kind||f.language} · 快照 ${f.hash.slice(0,10)}`);
     save(':last',{file,line:selectedLine,id:symbol?.id});
   }
@@ -112,6 +156,11 @@
   const certainty = c => c.certainty==='unresolved'?'未解析 / 外部':c.certainty==='contract'?'接口或声明目标':'静态绑定';
   function inspect(){
     const s=symbol;
+    if(/\.(md|mdx|rst|txt)$/i.test(current)){
+      $('symbol-head').innerHTML=`<strong>${esc(current.split('/').pop())}</strong><small>关键文档 · 从理解到源码</small>`;
+      $('inspector').innerHTML=`<article class="note"><h3>继续阅读关键文档</h3>${(D.analysis.documents||[]).map(d=>`<button class="relation" data-file="${esc(d.file)}">${esc(d.file)}<small>${esc(d.summary.split('\n')[0])}</small></button>`).join('')}</article>`;
+      return;
+    }
     $('symbol-head').innerHTML=s?`<small>${esc(s.kind)} · ${esc(s.file)}:${s.line}</small><strong>${esc(s.qualified)}</strong>${s.signature?`<div class="signature">${esc(s.signature)}</div>`:''}<button data-symbol="${esc(s.id)}">跳到定义 ↗</button>`:`<strong>${esc(current?.split('/').pop()||D.title)}</strong><small>选择代码中的符号，查看定义、引用与调用关系。</small>`;
     document.querySelectorAll('[data-panel]').forEach(el=>el.classList.toggle('active',el.dataset.panel===panel));
     if(panel==='explain'){
@@ -133,7 +182,10 @@
   }
   function graph(){
     let center=symbol?.id,nodes=new Map(),edges=[];
-    const add=(id,col)=>{if(!nodes.has(id)&&nodes.size<45)nodes.set(id,{id,col});};
+    const nextKey=(graphMode==='imports'?current:center)+':'+graphMode+':'+depth;
+    if(nextKey!==graphKey){graphKey=nextKey;nodeLimit=13;$('graph').scrollTop=0;$('graph').scrollLeft=0;}
+    const omitted=new Set();
+    const add=(id,col,limit=nodeLimit)=>{if(nodes.has(id))return true;if(nodes.size>=limit){omitted.add(id);return false;}nodes.set(id,{id,col});omitted.delete(id);return true;};
     if(graphMode==='imports'){
       center=current;if(!center)return;add(center,1);
       for(const e of D.imports){if(e.from===center&&e.to){add(e.to,2);edges.push({from:center,to:e.to});}else if(e.to===center){add(e.from,0);edges.push({from:e.from,to:center});}}
@@ -147,8 +199,8 @@
           let frontier=[center];const visited=new Set([center]);
           for(let d=1;d<=depth;d++){
             const next=[];
-            for(const id of frontier){const rels=direction<0?incoming.get(id)||[]:outgoing.get(id)||[];
-              for(const r of rels)for(const target of direction<0?[r.from]:r.to){if(!symMap.has(target))continue;add(target,depth+direction*d);edges.push({from:direction<0?target:id,to:direction<0?id:target,certainty:r.certainty});if(!visited.has(target)){visited.add(target);next.push(target);}}
+            for(const id of frontier){const rels=[...(direction<0?incoming.get(id)||[]:outgoing.get(id)||[])].sort((a,b)=>Number(direction<0?explained.has(b.from):b.to.some(t=>explained.has(t)))-Number(direction<0?explained.has(a.from):a.to.some(t=>explained.has(t))));
+              for(const r of rels)for(const target of direction<0?[r.from]:r.to){if(!symMap.has(target))continue;const admitted=add(target,depth+direction*d,direction<0?Math.ceil(nodeLimit/2):nodeLimit);edges.push({from:direction<0?target:id,to:direction<0?id:target,certainty:r.certainty});if(admitted&&!visited.has(target)){visited.add(target);next.push(target);}}
             }frontier=next;
           }
         }
@@ -156,11 +208,11 @@
     }
     edges=edges.filter(e=>nodes.has(e.from)&&nodes.has(e.to));
     const unique=new Map(edges.map(e=>[e.from+'>'+e.to,e]));edges=[...unique.values()];
-    const counts=new Map();for(const n of nodes.values()){const row=counts.get(n.col)||0;counts.set(n.col,row+1);n.x=30+n.col*240;n.y=35+row*86;}
-    const width=(Math.max(...[...nodes.values()].map(n=>n.col))+1)*240+30,height=Math.max(160,Math.max(...counts.values())*86+45);
-    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${Math.max(100,width/8)*zoom}%;min-height:${Math.min(height,450)*zoom}px" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?190:0),ex=b.x+(right?0:190);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),name=s?.qualified||n.id.split('/').pop(),sub=s?`${explained.has(s.id)?'已讲解 · ':''}${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(n.id)}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="190" height="58" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>25?name.slice(0,23)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
+    const counts=new Map();for(const n of nodes.values()){const row=counts.get(n.col)||0;counts.set(n.col,row+1);n.x=20+n.col*280;n.y=22+row*88;}
+    const width=(Math.max(...[...nodes.values()].map(n=>n.col))+1)*280+20,height=Math.max(160,Math.max(...counts.values())*86+45);
+    $('graph').innerHTML=`<svg viewBox="0 0 ${width} ${height}" style="width:${width*zoom}px;height:${height*zoom}px;min-width:0" aria-label="静态关系图"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${edges.map(e=>{const a=nodes.get(e.from),b=nodes.get(e.to),right=b.x>a.x;const sx=a.x+(right?240:0),ex=b.x+(right?0:240);return `<path class="graph-edge ${e.certainty==='contract'?'contract':''}" d="M${sx} ${a.y+27} C${(sx+ex)/2} ${a.y+27},${(sx+ex)/2} ${b.y+27},${ex} ${b.y+27}" marker-end="url(#arrow)"><title>${esc(e.kind||e.certainty||'调用 / 依赖')}</title></path>`;}).join('')}${[...nodes.values()].map(n=>{const s=symMap.get(n.id),name=s?.qualified||n.id.split('/').pop(),sub=s?`${explained.has(s.id)?'已讲解 · ':''}${s.kind} · L${s.line}`:n.id;return `<g class="graph-node ${n.id===center?'selected':''}" ${s?`data-symbol="${esc(n.id)}"`:`data-file="${esc(n.id)}"`} tabindex="0" role="button" aria-label="${esc(name)}"><title>${esc(name+'\n'+sub)}</title><rect x="${n.x}" y="${n.y}" width="240" height="64" rx="8"/><text x="${n.x+10}" y="${n.y+23}">${esc(name.length>28?name.slice(0,26)+'…':name)}</text><text class="sub" x="${n.x+10}" y="${n.y+43}">${esc(sub.length>30?'…'+sub.slice(-28):sub)}</text></g>`;}).join('')}</svg>`;
     $('graph-title').textContent=graphMode==='imports'?'文件依赖':graphMode==='types'?'extends / implements':'调用者 → 当前 → 调用目标';
-    $('graph-caption').textContent=`${nodes.size} 个节点${nodes.size>=45?' · 达到 45 个节点上限':''}。${graphMode==='both'?'实线：静态绑定；虚线：接口或声明。未解析调用见右侧。':'箭头指向依赖或基类型，不代表运行顺序。'}`;
+    $('graph-caption').innerHTML=`<span>${nodes.size} 个节点 · ${Math.round(zoom*100)}% · 滚动查看，不自动缩小${omitted.size?` · 当前展开范围另有 ${omitted.size} 个节点未显示`:''}。${graphMode==='both'?'完整调用位置见右侧；虚线表示接口或声明。':'箭头指向依赖或基类型。'}</span>${omitted.size&&nodeLimit<61?'<button data-action="graph-more">展开更多</button>':''}<button data-action="zoom-reset" title="恢复清晰字号">100%</button>`;
   }
   function search(mode=searchMode){searchMode=mode;$('search-dialog').showModal();document.querySelectorAll('[data-search]').forEach(b=>b.classList.toggle('active',b.dataset.search===mode));$('search-input').value='';$('search-input').focus();results();}
   function showResults(items,label){$('search-status').textContent=label;$('results').innerHTML=items.join('')||'<p class="empty">没有结果。</p>';}
@@ -170,6 +222,7 @@
     if(searchMode==='files') {const found=D.files.filter(f=>f.readable&&f.id.toLowerCase().includes(q));showResults(found.slice(0,250).map(f=>result(f.id.split('/').pop(),f.id,`data-file="${esc(f.id)}"`)),`${found.length} 个文件 · 显示前 250 个`);}
     else if(searchMode==='symbols'||searchMode==='explained'){const found=D.symbols.filter(s=>(searchMode!=='explained'||explained.has(s.id))&&(s.qualified+' '+s.file).toLowerCase().includes(q));showResults(found.slice(0,250).map(s=>result(s.qualified+(explained.has(s.id)?' · 已讲解':''),s.kind+' · '+s.file+':'+s.line,`data-symbol="${esc(s.id)}"`)),`${found.length} 个符号 · 显示前 250 个`);}
     else if(searchMode==='chains'){showResults((D.analysis.chains||[]).map((c,i)=>({c,i})).filter(({c})=>(c.title+c.summary).toLowerCase().includes(q)).map(({c,i})=>result(c.title,c.summary,`data-chain="${i}"`)),'人工分析的阅读路径；步骤可以包含已明确标注的动态边界。');}
+    else if(searchMode==='documents'){showResults((D.analysis.documents||[]).filter(d=>(d.file+d.summary).toLowerCase().includes(q)).map(d=>result(d.file.split('/').pop(),d.file,`data-file="${esc(d.file)}"`)),`${(D.analysis.documents||[]).length} 份关键文档已提供中文概要与译文`);}
     else if(searchMode==='bookmarks'){showResults(marks.filter(m=>m.file.toLowerCase().includes(q)).map(m=>result(m.file.split('/').pop()+':'+m.line,m.file,`data-file="${esc(m.file)}" data-line="${m.line}"`)),'书签仅保存在当前浏览器。');}
     else if(!runText||!q){showResults([],'输入文本后按 Enter；读取离线源码快照，不访问网络。');}
     else {
@@ -184,6 +237,7 @@
     const q=$('find-input').value.toLowerCase(),data=window.SOURCE_FILES[current];if(!data)return;
     matches=data.text.split('\n').flatMap((line,i)=>q&&line.toLowerCase().includes(q)?[i+1]:[]);
     matchCursor=matches.length?(matchCursor+delta+matches.length)%matches.length:-1;
+    docMode='source';
     if(matchCursor>=0)selectedLine=matches[matchCursor];folded.clear();code();$('code').querySelector(`[data-line="${selectedLine}"]`)?.scrollIntoView({block:'center'});
     $('find-count').textContent=`${matchCursor+1}/${matches.length} 行`;
   }
@@ -192,6 +246,7 @@
     $('info-dialog').showModal();
   }
   document.addEventListener('click',async event=>{
+    const docTab=event.target.closest('[data-doc]');if(docTab){docMode=docTab.dataset.doc;code();$('code').scrollTop=0;return;}
     const explanation=event.target.closest('[data-explain]');
     if(explanation){
       const n=D.analysis.notes[Number(explanation.dataset.explain)];
@@ -212,7 +267,11 @@
     const g=event.target.closest('[data-graph]');if(g){graphMode=g.dataset.graph;document.querySelectorAll('[data-graph]').forEach(el=>el.classList.toggle('active',el===g));graph();return;}
     const mode=event.target.closest('[data-search]');if(mode){searchMode=mode.dataset.search;document.querySelectorAll('[data-search]').forEach(el=>el.classList.toggle('active',el===mode));results();return;}
     const a=event.target.closest('[data-action]')?.dataset.action;if(!a)return;
-    if(a==='back')history.back();else if(a==='forward')history.forward();else if(a==='search')search('files');else if(a==='chains')search('chains');else if(a==='bookmarks')search('bookmarks');
+    if(a==='entry'){const s=D.analysis.start;if(s){panel='explain';chain=undefined;go(s.file,s.line,s.symbolId);}return;}
+    if(a==='file-intro'){$('code').scrollTop=0;return;}
+    if(a==='graph-more'){nodeLimit=Math.min(61,nodeLimit+12);graph();return;}
+    if(a==='zoom-reset'){zoom=1;graph();return;}
+    if(a==='back')history.back();else if(a==='forward')history.forward();else if(a==='search')search('files');else if(a==='chains')search('chains');else if(a==='documents')search('documents');else if(a==='bookmarks')search('bookmarks');
     else if(a==='search-close'){$('search-dialog').close();searchVersion++;}else if(a==='info-close')$('info-dialog').close();else if(a==='help')help();
     else if(a==='sidebar')document.body.classList.toggle(matchMedia('(max-width:720px)').matches?'mobile-left':'hidden-left');
     else if(a==='inspector')document.body.classList.toggle(matchMedia('(max-width:720px)').matches?'mobile-right':'hidden-right');
@@ -223,12 +282,12 @@
     else if(a==='copy'){const lines=window.SOURCE_FILES[current].text.split('\n'),text=symbol?lines.slice(symbol.line-1,symbol.end).join('\n'):lines.join('\n');try{await navigator.clipboard.writeText(text);status('已复制原始源码（不含讲解）');}catch{status('浏览器不允许剪贴板写入，可在代码中选择文本复制。');}}
     else if(a==='editor')location.href='vscode://file/'+(D.root+'/'+current).split('/').map(encodeURIComponent).join('/')+':'+selectedLine;
     else if(a==='bookmark'){const i=marks.findIndex(m=>m.file===current&&m.line===selectedLine);if(i>=0)marks.splice(i,1);else marks.push({file:current,line:selectedLine});save(':marks',marks);code();}
-    else if(a==='find'){$('findbar').hidden=false;$('find-input').focus();}
+    else if(a==='find'){docMode='source';code();$('findbar').hidden=false;$('find-input').focus();}
     else if(a==='find-close'){$('findbar').hidden=true;$('find-input').value='';code();}
     else if(a==='find-next')find(1);else if(a==='find-prev')find(-1);
-    else if(a==='line'){$('info').innerHTML='<h2>跳到行</h2><form id="line-form"><input id="line-input" type="number" min="1" max="'+fileMap.get(current).lines+'" value="'+selectedLine+'" aria-label="行号"><button>跳转</button></form>';$('info-dialog').showModal();$('line-input').select();$('line-form').onsubmit=e=>{e.preventDefault();const l=Number($('line-input').value);$('info-dialog').close();go(current,l);};}
+    else if(a==='line'){docMode='source';code();$('info').innerHTML='<h2>跳到行</h2><form id="line-form"><input id="line-input" type="number" min="1" max="'+fileMap.get(current).lines+'" value="'+selectedLine+'" aria-label="行号"><button>跳转</button></form>';$('info-dialog').showModal();$('line-input').select();$('line-form').onsubmit=e=>{e.preventDefault();const l=Number($('line-input').value);$('info-dialog').close();go(current,l);};}
     else if(a==='depth'){depth=depth===1?2:1;event.target.closest('button').textContent=depth+' 层';graph();}
-    else if(a==='zoom-in'||a==='zoom-out'){zoom=Math.min(3,Math.max(.5,zoom+(a==='zoom-in'?.2:-.2)));graph();}
+    else if(a==='zoom-in'||a==='zoom-out'){zoom=Math.min(3,Math.max(.85,zoom+(a==='zoom-in'?.2:-.2)));graph();}
   });
   document.addEventListener('dblclick',event=>{const r=event.target.closest('[data-ref]');if(r)jump(r.dataset.ref.split('|')[0]);});
   $('file-filter').oninput=fileTree;$('symbol-filter').oninput=outline;

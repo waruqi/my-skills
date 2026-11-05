@@ -180,6 +180,15 @@ for (const chain of analysis.chains || []) {
   for (const step of chain.steps) resolveAnchor(step);
 }
 if (analysis.start) resolveAnchor(analysis.start);
+for (const note of analysis.fileNotes || []) {
+  if (!textByFile.has(note.file) || !note.summary) throw new Error('文件讲解需要已收录文件和职责摘要');
+}
+for (const doc of analysis.documents || []) {
+  const file = files.find(f => f.id === doc.file && f.readable);
+  if (!file || file.hash !== doc.sourceHash) throw new Error('文档译文与当前源码快照不匹配：' + doc.file);
+  if (!doc.summary || !doc.translation) throw new Error('关键文档需要中文概要和完整译文');
+  for (const link of doc.related || []) resolveAnchor({ ...link, line: link.line || 1 });
+}
 fs.mkdirSync(path.join(out, 'chunks'), { recursive: true });
 const encode = data => JSON.stringify(data).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
 for (const file of files) {

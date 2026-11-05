@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 test('索引区分同名方法、别名导入、接口与未知调用，保留安全文本', () => {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'source-insight-test-'));
@@ -42,6 +43,12 @@ test('索引区分同名方法、别名导入、接口与未知调用，保留�
     const chunk=fs.readFileSync(path.join(root,'out',d.files.find(f=>f.id==='b.ts').chunk),'utf8');
     assert(!chunk.includes('</script>'));assert(chunk.includes('\\u003c/script>'));
     assert.equal(d.revision,'uncommitted');
+    analysis.documents=[{file:'a.ts',summary:'文档概要',translation:'译文',sourceHash:'stale'}];
+    fs.writeFileSync(path.join(root,'analysis.json'),JSON.stringify(analysis));
+    assert.throws(()=>execFileSync(process.execPath,argv,{stdio:'pipe'}),/Command failed/);
+    analysis.documents[0].sourceHash=createHash('sha256').update(files['a.ts']).digest('hex');
+    fs.writeFileSync(path.join(root,'analysis.json'),JSON.stringify(analysis));
+    execFileSync(process.execPath,argv,{stdio:'pipe'});
     analysis.notes[0].symbol='missing';fs.writeFileSync(path.join(root,'analysis.json'),JSON.stringify(analysis));
     assert.throws(()=>execFileSync(process.execPath,argv,{stdio:'pipe'}),/Command failed/);
   } finally { fs.rmSync(root,{recursive:true,force:true}); }
