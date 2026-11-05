@@ -9,7 +9,8 @@ export function writeHistory(root, out, notes = []) {
   const empty='4b825dc642cb6eb9a060e54bf8d69288fbee4904';
   let head;
   try { head=git(['rev-parse','--verify','HEAD']).trim(); } catch {}
-  const hashes=head?git(['log','--since=3 months ago','-40','--format=%H']).trim().split('\n').filter(Boolean):[];
+  const recent=head?git(['log','--since=3 months ago','-40','--format=%H']).trim().split('\n').filter(Boolean):[];
+  const hashes=[...new Set([...recent,...notes.filter(n=>n.deep&&/^[a-f0-9]{40}$/.test(n.commit)).map(n=>n.commit)])];
   const encode=data=>JSON.stringify(data).replaceAll('<','\\u003c');
   const commits=[];
   const directory=path.join(out,'history');fs.mkdirSync(directory,{recursive:true});
@@ -26,7 +27,7 @@ export function writeHistory(root, out, notes = []) {
     const counts=new Map(stats.map(row=>{const [add,del,...parts]=row.split('\t');return [parts.join('\t'),{add,del}];}));
     const manual=notes.find(n=>n.commit===id);
     const files=[];let total=0;
-    for(const file of names.slice(0,100)){
+    for(const file of names.slice(0,manual?.deep?250:100)){
       const stat=counts.get(file)||{add:'0',del:'0'};
       let patch='',truncated=false;
       if(total<2e6){
@@ -36,10 +37,10 @@ export function writeHistory(root, out, notes = []) {
       const explanation=manual?.files?.find(n=>n.file===file)?.summary;
       files.push({file,...stat,patch,truncated,summary:explanation||`自动统计：${file} ${stat.add==='-'?'包含二进制变化':`新增 ${stat.add} 行，删除 ${stat.del} 行`}。具体行为变化尚未人工分析。`,analyzed:!!explanation});
     }
-    const record={id,title:meta[0],author:meta[1],date:meta[2],body:meta[3],parent,working,files,totalFiles:names.length,summary:manual?.summary||`自动统计：本${working?'次工作区修改':'提交'}涉及 ${names.length} 个文件。${working?'合并展示相对 HEAD 的暂存和未暂存修改，不含未跟踪文件。':'与第一父提交比较；提交标题与正文保留原文，尚未人工分析设计原因。'}`,analyzed:!!manual?.summary};
+    const record={id,title:meta[0],author:meta[1],date:meta[2],body:meta[3],parent,working,files,deep:!!manual?.deep,analysisTitle:manual?.title,sections:manual?.sections||[],totalFiles:names.length,summary:manual?.summary||`自动统计：本${working?'次工作区修改':'提交'}涉及 ${names.length} 个文件。${working?'合并展示相对 HEAD 的暂存和未暂存修改，不含未跟踪文件。':'与第一父提交比较；提交标题与正文保留原文，尚未人工分析设计原因。'}`,analyzed:!!manual?.summary};
     const chunk='history/'+createHash('sha256').update(id).digest('hex').slice(0,20)+'.js';
     fs.writeFileSync(path.join(out,chunk),`window.SOURCE_HISTORY[${encode(id)}]=${encode(record)};\n`);
-    commits.push({id,title:record.title,author:record.author,date:record.date,files:names,chunk,working});
+    commits.push({id,title:record.title,author:record.author,date:record.date,files:names,chunk,working,deep:record.deep,analysisTitle:record.analysisTitle});
   }
-  return {commits,range:'本地最近三个月，最多 40 个提交；每提交最多 100 个文件，每文件最多 100 KB。重命名按删除与新增展示。',generated:new Date().toISOString()};
+  return {commits,range:'本地最近三个月，最多 40 个提交；另保留选定深度分析提交；普通提交最多 100 个文件，深度分析最多 250 个文件，每文件最多 100 KB。重命名按删除与新增展示。',generated:new Date().toISOString()};
 }

@@ -15,11 +15,14 @@ test('根提交、暂存和未暂存修改、说明、凭据排除与安全补�
   git(['init','-q']);fs.writeFileSync(path.join(root,'file.txt'),'before\n');fs.writeFileSync(path.join(root,'.env'),'secret=fixture\n');git(['add','file.txt','.env']);
   const tree=git(['write-tree']),id=git(['commit-tree',tree,'-m','initial']);git(['update-ref','HEAD',id]);
   fs.writeFileSync(path.join(root,'file.txt'),'staged\n');git(['add','file.txt']);fs.writeFileSync(path.join(root,'file.txt'),'working </script>\n');
-  const out=path.join(root,'out'),history=writeHistory(root,out,[{commit:id,summary:'初始化文件',files:[{file:'file.txt',summary:'建立原始内容'}]}]);
+  const out=path.join(root,'out'),history=writeHistory(root,out,[{commit:id,deep:true,title:'建立文件',sections:[{title:'执行过程',body:'原文 </script> 应保持文本'}],summary:'初始化文件',files:[{file:'file.txt',summary:'建立原始内容'}]}]);
   const context={window:{SOURCE_HISTORY:{}}};
   for(const c of history.commits){assert(!c.files.includes('.env'));const text=fs.readFileSync(path.join(out,c.chunk),'utf8');assert(!text.includes('</script>'));vm.runInNewContext(text,context);}
   const records=context.window.SOURCE_HISTORY;
   assert.match(records.working.files[0].patch,/-before\n\+working <\/script>/);assert(!records.working.files[0].patch.includes('+staged'));
   assert.match(records[id].files[0].patch,/\+before/);assert.equal(records[id].summary,'初始化文件');assert.equal(records[id].files[0].summary,'建立原始内容');
+  assert.equal(history.commits.find(c=>c.id===id).deep,true);
+  assert.equal(records[id].analysisTitle,'建立文件');
+  assert.equal(records[id].sections[0].body,'原文 </script> 应保持文本');
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

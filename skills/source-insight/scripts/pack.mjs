@@ -13,7 +13,7 @@ export function pack(manifest, out) {
     calls: manifest.calls.map(c=>[symbols.get(c.from)??-1,c.to.map(id=>symbols.get(id)),files.get(c.file),c.line,c.col,c.expression,c.kind==='construct'?1:0,c.deferred?1:0,['unresolved','contract','static'].indexOf(c.certainty)]),
   };
   const assets=fileURLToPath(new URL('../assets/',import.meta.url));
-  for(const name of ['index.html','style.css','app.js','history-view.js'])fs.copyFileSync(path.join(assets,name),path.join(out,name));
+  for(const name of ['index.html','style.css','app.js','history-view.js','highlight.min.js','highlight.LICENSE','syntax.js'])fs.copyFileSync(path.join(assets,name),path.join(out,name));
   fs.writeFileSync(path.join(out,'data.js'),'window.SOURCE_INDEX='+JSON.stringify(wire).replaceAll('<','\\u003c').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029')+';window.SOURCE_FILES={};\n');
 }
 

@@ -48,7 +48,7 @@
     const found = D.files.filter(f=>f.id.toLowerCase().includes(query));
     const tree = { dirs:new Map(),files:[] };
     for(const f of found){const parts=f.id.split('/');parts.pop();let d=tree;for(const part of parts){if(!d.dirs.has(part))d.dirs.set(part,{dirs:new Map(),files:[]});d=d.dirs.get(part);}d.files.push(f);}
-    const render=(dir,prefix='')=>[...dir.dirs].map(([name,d])=>`<details ${query||current?.startsWith(prefix+name+'/')?'open':''}><summary>${esc(name)}</summary><div>${render(d,prefix+name+'/')}</div></details>`).join('')+dir.files.map(f=>`<button class="row ${f.id===current?'active':''}" data-file="${esc(f.id)}" ${f.readable?'':'disabled'} title="${esc(f.reason||f.id)}"><span class="kind">${f.language==='typescript'?'TS':'·'}</span><span>${esc(f.id.split('/').pop())}</span></button>`).join('');
+    const render=(dir,prefix='')=>[...dir.dirs].map(([name,d])=>`<details ${query||current?.startsWith(prefix+name+'/')?'open':''}><summary>${esc(name)}</summary><div>${render(d,prefix+name+'/')}</div></details>`).join('')+dir.files.map(f=>`<button class="row ${f.id===current?'active':''}" data-file="${esc(f.id)}" ${f.readable?'':'disabled'} title="${esc(f.reason||f.id)}"><span class="kind">${esc(window.SourceSyntax.language(f.id)?.slice(0,3).toUpperCase()||'·')}</span><span>${esc(f.id.split('/').pop())}</span></button>`).join('');
     $('tree').innerHTML=render(tree);
   }
   function outline() {
@@ -78,7 +78,7 @@
     });
     const blocks=text.split(/(```[^\n]*\n[\s\S]*?```)/g);
     return blocks.map(block=>{
-      if(block.startsWith('```'))return '<pre><code>'+esc(block.replace(/^```[^\n]*\n/,'').replace(/```$/,''))+'</code></pre>';
+      if(block.startsWith('```')){const lang=block.match(/^```([^\s]*)/)?.[1]||'text';return '<pre><code>'+window.SourceSyntax.html(block.replace(/^```[^\n]*\n/,'').replace(/```$/,''),lang)+'</code></pre>';}
       return block.split(/\n\s*\n/).filter(Boolean).map(paragraph=>{
         const heading=paragraph.match(/^(#{1,6}) (.*)$/);
         return heading?`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`:`<p>${inline(paragraph)}</p>`;
@@ -102,6 +102,7 @@
     $('doc-tabs').hidden=true;document.body.classList.remove('reading-doc');
     if(documentView())return;
     const data=window.SOURCE_FILES[current];if(!data)return;
+    if(!data.syntaxReady){data.tokens=window.SourceSyntax.tokens(data.text,current);data.syntaxReady=true;}
     const lines=data.text.split('\n'), perLine=new Map();
     for(const r of data.refs){if(!perLine.has(r.line))perLine.set(r.line,[]);perLine.get(r.line).push(r);}
     const noteLines=new Map();
